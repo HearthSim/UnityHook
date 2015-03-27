@@ -71,8 +71,11 @@ namespace Hooker
 			var testTypes = Module.Types.Where(t => t.Name.EndsWith(typeName));
 			foreach (var testType in testTypes)
 			{
-				var testMethod = testType.Methods.First(m => m.Name.EndsWith(methodName));
-				AddHook(testMethod);
+				var testMethod = testType.Methods.FirstOrDefault(m => m.Name.EndsWith(methodName));
+				if (testMethod != null)
+				{
+					AddHook(testMethod);
+				}
 			}
 		}
 
