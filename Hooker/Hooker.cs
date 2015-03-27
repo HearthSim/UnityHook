@@ -133,20 +133,20 @@ namespace Hooker
 			hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
 			hook.Add(Instruction.Create(OpCodes.Call, onCallMethod));
 			hook.Add(Instruction.Create(OpCodes.Stloc, hookResult));
+			// if (hookResult != null) {
+			//     return (ReturnType)hookResult;
+			// }
+			hook.Add(Instruction.Create(OpCodes.Ldloc, hookResult));
+			hook.Add(Instruction.Create(OpCodes.Ldnull));
+			hook.Add(Instruction.Create(OpCodes.Ceq));
+			hook.Add(Instruction.Create(OpCodes.Brtrue_S, method.Body.Instructions.First()));
 			if (!method.ReturnType.FullName.EndsWith("Void"))
 			{
-				// if (hookResult != null) {
-				//     return (ReturnType)hookResult;
-				// }
-				hook.Add(Instruction.Create(OpCodes.Ldloc, hookResult));
-				hook.Add(Instruction.Create(OpCodes.Ldnull));
-				hook.Add(Instruction.Create(OpCodes.Ceq));
-				hook.Add(Instruction.Create(OpCodes.Brtrue_S, method.Body.Instructions.First()));
 				hook.Add(Instruction.Create(OpCodes.Ldloc, hookResult));
 				hook.Add(Instruction.Create(OpCodes.Castclass, method.ReturnType));
 				hook.Add(Instruction.Create(OpCodes.Unbox_Any, method.ReturnType));
-				hook.Add(Instruction.Create(OpCodes.Ret));
 			}
+			hook.Add(Instruction.Create(OpCodes.Ret));
 
 			hook.Reverse();
 			foreach (var inst in hook)
