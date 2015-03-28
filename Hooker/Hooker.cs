@@ -123,7 +123,14 @@ namespace Hooker
 				hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
 				hook.Add(Instruction.Create(OpCodes.Ldc_I4, i));
 				hook.Add(Instruction.Create(OpCodes.Ldarg, param));
-				if (param.ParameterType.IsValueType)
+				if (param.ParameterType.IsByReference)
+				{
+					// if the arg is a reference type, it must be copied and boxed
+					var refType = (ByReferenceType)param.ParameterType;
+					hook.Add(Instruction.Create(OpCodes.Ldobj, refType.ElementType));
+					hook.Add(Instruction.Create(OpCodes.Box, refType.ElementType));
+				}
+				else if (param.ParameterType.IsValueType)
 				{
 					// if the arg descends from ValueType, it must be boxed to be
 					// converted to an object:
