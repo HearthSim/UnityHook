@@ -26,10 +26,10 @@ namespace Hooker
 			while (!sr.EndOfStream)
 			{
 				var line = sr.ReadLine();
-				var parts = line.Split('.');
-				if (parts.Length == 2)
+				var dotI = line.IndexOf('.');
+				if (dotI > 0)
 				{
-					hooker.AddHookBySuffix(parts[0].Trim(), parts[1].Trim());
+					hooker.AddHookBySuffix(line.Substring(0, dotI), line.Substring(dotI + 1));
 				}
 			}
 
