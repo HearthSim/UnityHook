@@ -69,18 +69,29 @@ namespace Hooker
 		public void AddHookBySuffix(string typeName, string methodName)
 		{
 			var testTypes = Module.Types.Where(t => t.Name.EndsWith(typeName));
+			var found = false;
 			foreach (var testType in testTypes)
 			{
 				var testMethod = testType.Methods.FirstOrDefault(m => m.Name.EndsWith(methodName));
 				if (testMethod != null)
 				{
 					AddHook(testMethod);
+					found = true;
 				}
+			}
+			if (!found)
+			{
+				Console.WriteLine("Cannot find any method matching {0}.{1}", typeName, methodName);
 			}
 		}
 
 		public void AddHook(MethodDefinition method)
 		{
+			if (!method.HasBody)
+			{
+				Console.WriteLine("Cannot hook method `{0}`", method);
+				return;
+			}
 			if (method.HasGenericParameters)
 			{
 				// TODO: check if this hook procedure works with generics as-is
