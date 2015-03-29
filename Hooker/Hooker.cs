@@ -68,14 +68,17 @@ namespace Hooker
 
 		public void AddHookBySuffix(string typeName, string methodName)
 		{
-			var testTypes = Module.Types.Where(t => t.Name.EndsWith(typeName));
-			var found = false;
-			foreach (var testType in testTypes)
+			var matchingTypes = Module.Types.Where(t =>
 			{
-				var testMethod = testType.Methods.FirstOrDefault(m => m.Name.EndsWith(methodName));
-				if (testMethod != null)
+				var idx = t.Name.IndexOf(typeName);
+				return idx < 0 ? false : idx == 0 || t.Name[idx - 1] == '.';
+			});
+			var found = false;
+			foreach (var type in matchingTypes)
+			{
+				foreach (var method in type.Methods.Where(m => m.Name == methodName))
 				{
-					AddHook(testMethod);
+					AddHook(method);
 					found = true;
 				}
 			}
@@ -97,6 +100,7 @@ namespace Hooker
 				// TODO: check if this hook procedure works with generics as-is
 				throw new InvalidOperationException("Generic parameters not supported");
 			}
+			Console.WriteLine("Hooking method `{0}`", method);
 			// object[] interceptedArgs;
 			// object hookResult;
 			var interceptedArgs = new VariableDefinition("interceptedArgs", method.Module.TypeSystem.Object.MakeArrayType());
