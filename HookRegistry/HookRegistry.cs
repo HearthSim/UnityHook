@@ -48,13 +48,6 @@ namespace Hooks
 
 		object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
-			if (args.Length == 0)
-			{
-				// Installed hook is broken:
-				throw new Exception("OnCall called with 0 args");
-			}
-
-			// var rmh = (RuntimeMethodHandle)args[0];
 			var method = MethodBase.GetMethodFromHandle(rmh);
 			var typeName = method.DeclaringType.FullName;
 			var methodName = method.Name;
