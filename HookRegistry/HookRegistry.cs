@@ -10,13 +10,13 @@ namespace Hooks
 {
 	public class HookRegistry
 	{
-		public delegate object Callback(string typeName,string methodName,params object[] args);
+		public delegate object Callback(string typeName, string methodName, object thisObj, object[] args);
 
 		List<Callback> callbacks = new List<Callback>();
 
-		public static object OnCall(params object[] args)
+		public static object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
-			return HookRegistry.Get().Internal_OnCall(args);
+			return HookRegistry.Get().Internal_OnCall(rmh, thisObj, args);
 		}
 
 		// Add a hook listener
@@ -46,7 +46,7 @@ namespace Hooks
 			}
 		}
 
-		object Internal_OnCall(params object[] args)
+		object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
 			if (args.Length == 0)
 			{
@@ -54,14 +54,14 @@ namespace Hooks
 				throw new Exception("OnCall called with 0 args");
 			}
 
-			var rmh = (RuntimeMethodHandle)args[0];
+			// var rmh = (RuntimeMethodHandle)args[0];
 			var method = MethodBase.GetMethodFromHandle(rmh);
 			var typeName = method.DeclaringType.FullName;
 			var methodName = method.Name;
 			Debug.Log(String.Format("{0}.{1}(...)", typeName, methodName));
 			foreach (var cb in callbacks)
 			{
-				var o = cb(typeName, methodName, args.Slice(1));
+				var o = cb(typeName, methodName, thisObj, args);
 				if (o != null)
 				{
 					return o;

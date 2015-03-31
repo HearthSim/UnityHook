@@ -109,29 +109,25 @@ namespace Hooker
 			method.Body.Variables.Add(hookResult);
 			var numArgs = method.Parameters.Count;
 			var hook = new List<Instruction>();
-			// interceptedArgs = new object[numArgs + (isStatic ? 2 : 1)];
-			hook.Add(Instruction.Create(OpCodes.Ldc_I4, numArgs + (method.IsStatic ? 1 : 2)));
+			// interceptedArgs = new object[numArgs];
+			hook.Add(Instruction.Create(OpCodes.Ldc_I4, numArgs));
 			hook.Add(Instruction.Create(OpCodes.Newarr, Module.TypeSystem.Object));
 			hook.Add(Instruction.Create(OpCodes.Stloc, interceptedArgs));
 
-			// interceptedArgs[0] = (object)methodof(this).MethodHandle;
-			hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
-			hook.Add(Instruction.Create(OpCodes.Ldc_I4_0));
+			// rmh = methodof(this).MethodHandle;
 			hook.Add(Instruction.Create(OpCodes.Ldtoken, method));
-			hook.Add(Instruction.Create(OpCodes.Box, rmhType));
-			hook.Add(Instruction.Create(OpCodes.Stelem_Ref));
 
-			var i = 1;
+			// thisObj = static ? null : this;
 			if (!method.IsStatic)
 			{
-				// interceptedArgs[1] = (object)this;
-				hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
-				hook.Add(Instruction.Create(OpCodes.Ldc_I4, i));
 				hook.Add(Instruction.Create(OpCodes.Ldarg_0));
-				hook.Add(Instruction.Create(OpCodes.Stelem_Ref));
-				i++;
+			}
+			else
+			{
+				hook.Add(Instruction.Create(OpCodes.Ldnull));
 			}
 
+			var i = 0;
 			foreach (var param in method.Parameters)
 			{
 				// interceptedArgs[i] = (object)arg;
@@ -154,7 +150,7 @@ namespace Hooker
 				hook.Add(Instruction.Create(OpCodes.Stelem_Ref));
 				i++;
 			}
-			// hookResult = HookRegistry.OnCall(interceptedArgs);
+			// hookResult = HookRegistry.OnCall(rmh, thisObj, interceptedArgs);
 			hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
 			hook.Add(Instruction.Create(OpCodes.Call, onCallMethod));
 			hook.Add(Instruction.Create(OpCodes.Stloc, hookResult));

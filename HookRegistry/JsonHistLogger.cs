@@ -311,7 +311,7 @@ namespace Hooks
 		public TextWriter log;
 		JsonSerializer js;
 
-		object OnCall(string typeName, string methodName, params object[] args)
+		object OnCall(string typeName, string methodName, object thisArg, object[] args)
 		{
 			if (log == null)
 			{
@@ -321,7 +321,7 @@ namespace Hooks
 			}
 			if (typeName == "GameState" && methodName == "OnPowerHistory")
 			{
-				var historyList = args[1] as List<Network.PowerHistory>;
+				var historyList = args[0] as List<Network.PowerHistory>;
 				js.Serialize(log, historyList);
 				log.WriteLine();
 				log.Write(',');
