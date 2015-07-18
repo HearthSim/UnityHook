@@ -30,6 +30,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="BackendSwitcher.cs" />
     <Compile Include="HookRegistry.cs" />
     <Compile Include="JsonHistLogger.cs" />
   </ItemGroup>

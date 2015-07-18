@@ -11,7 +11,7 @@ namespace Hooks
 			HookRegistry.Register (OnCall);
 		}
 
-		object OnCall(string typeName, string methodName, params object[] args) {
+		object OnCall(string typeName, string methodName, object thisObj, params object[] args) {
 			if (typeName != "BattleNet" || methodName != ".cctor") {
 				return null;
 			}
