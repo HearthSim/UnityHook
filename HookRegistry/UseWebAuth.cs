@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 
 namespace Hooks
 {
@@ -16,6 +12,10 @@ namespace Hooks
 
 		object OnCall(string typeName, string methodName, object thisObj, object[] args)
 		{
+			if (typeName == "BattleNetCSharp" && methodName == "GetLaunchOption")
+			{
+				return "";
+			}
 			if (typeName != "BattleNetCSharp" || methodName != "AuroraStateHandler_WaitForLogon")
 			{
 				return null;

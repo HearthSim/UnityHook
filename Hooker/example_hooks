@@ -1,3 +1,4 @@
 GameState.OnPowerHistory
 BattleNet..cctor
 BattleNetCSharp.AuroraStateHandler_WaitForLogon
+BattleNetCSharp.GetLaunchOption
