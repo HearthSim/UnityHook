@@ -26,7 +26,7 @@ namespace Hooks
 				throw new NotImplementedException("Invalid Battle.net Backend (Aurora.Backend)");
 			}
 			typeof(BattleNet).GetField("s_impl", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, impl);
-			Log.Bob.Print("Forced BattleNet backend to {0}", backend);
+			Log.BattleNet.Print("Forced BattleNet backend to {0}", backend);
 			return 1;
 		}
 	}
