@@ -172,7 +172,7 @@ namespace Hooks
 			}
 			writer.WriteEndObject();
 			writer.WritePropertyName("Type");
-			writer.WriteValue(Enum.GetName(typeof(Network.PowerHistory.PowType), hist.Type));
+			writer.WriteValue(Enum.GetName(typeof(Network.PowerType), hist.Type));
 			writer.WriteEndObject();
 		}
 	}
@@ -264,7 +264,7 @@ namespace Hooks
 			writer.WritePropertyName("Players");
 			serializer.Serialize(writer, create.Players);
 			writer.WritePropertyName("Type");
-			writer.WriteValue(Enum.GetName(typeof(Network.PowerHistory.PowType), create.Type));
+			writer.WriteValue(Enum.GetName(typeof(Network.PowerType), create.Type));
 			writer.WriteEndObject();
 		}
 	}
@@ -273,7 +273,7 @@ namespace Hooks
 	{
 		public override bool CanConvert(Type objectType)
 		{
-			return objectType == typeof(Network.PowerHistory.PowType);
+			return objectType == typeof(Network.PowerType);
 		}
 
 		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
@@ -283,25 +283,7 @@ namespace Hooks
 
 		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
 		{
-			writer.WriteValue(Enum.GetName(typeof(Network.PowerHistory.PowType), value));
-		}
-	}
-
-	public class PowSubTypeSerializer : JsonConverter
-	{
-		public override bool CanConvert(Type objectType)
-		{
-			return objectType == typeof(Network.PowerHistoryAction.PowSubType);
-		}
-
-		public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-		{
-			throw new NotSupportedException();
-		}
-
-		public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-		{
-			writer.WriteValue(Enum.GetName(typeof(Network.PowerHistoryAction.PowSubType), value));
+			writer.WriteValue(Enum.GetName(typeof(Network.PowerType), value));
 		}
 	}
 
