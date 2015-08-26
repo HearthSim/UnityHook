@@ -31,6 +31,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BackendSwitcher.cs" />
+    <Compile Include="BundleExporter.cs" />
     <Compile Include="HookRegistry.cs" />
     <Compile Include="JsonHistLogger.cs" />
     <Compile Include="UseWebAuth.cs" />
