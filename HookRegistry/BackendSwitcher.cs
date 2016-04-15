@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reflection;
+using bgs;
 
 namespace Hooks
 {
@@ -18,9 +19,7 @@ namespace Hooks
 			string backend = Vars.Key("Aurora.Backend").GetStr("BattleNetDll");
 
 			IBattleNet impl;
-			if (backend == "BattleNetDll") {
-				impl = new BattleNetDll ();
-			} else if (backend == "BattleNetCSharp") {
+			if (backend == "BattleNetCSharp") {
 				impl = new BattleNetCSharp();
 			} else {
 				throw new NotImplementedException("Invalid Battle.net Backend (Aurora.Backend)");
