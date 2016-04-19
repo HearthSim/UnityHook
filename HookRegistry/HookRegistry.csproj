@@ -33,6 +33,7 @@
     <Compile Include="BundleExporter.cs" />
     <Compile Include="HookRegistry.cs" />
     <Compile Include="JsonHistLogger.cs" />
+    <Compile Include="SSLDisable.cs" />
     <Compile Include="UseWebAuth.cs" />
   </ItemGroup>
   <ItemGroup>
