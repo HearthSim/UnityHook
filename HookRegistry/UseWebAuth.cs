@@ -1,4 +1,5 @@
 using System.Reflection;
+using bgs;
 
 namespace Hooks
 {
