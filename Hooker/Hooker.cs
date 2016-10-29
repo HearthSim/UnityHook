@@ -22,7 +22,7 @@ namespace Hooker
 				Console.WriteLine("No file \"" + args[1] + "\"");
 				return;
 			}
-			if (!File.Exists(args[0]))
+			if (!Directory.Exists(args[0]))
 			{
 				Console.WriteLine("No directory \"" + args[0] + "\"");
 				return;
