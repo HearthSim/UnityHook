@@ -17,6 +17,16 @@ namespace Hooker
 				Console.WriteLine("Usage: Hooker.exe [GameName_Data directory] [hooks file]");
 				return;
 			}
+			if (!File.Exists(args[1]))
+			{
+				Console.WriteLine("No file \"" + args[1] + "\"");
+				return;
+			}
+			if (!Directory.Exists(args[0]))
+			{
+				Console.WriteLine("No directory \"" + args[0] + "\"");
+				return;
+			}
 			var dataPath = args[0];
 			foreach (var s in new[] { "Assembly-CSharp-firstpass", "Assembly-CSharp" }) {
 				var inStream = File.Open(s + ".dll", FileMode.Open, FileAccess.Read);
