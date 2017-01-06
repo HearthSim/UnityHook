@@ -88,33 +88,108 @@ namespace Hooker
 
             try
             {
+                // Load the Hookregistery class. 
+                // This operation will throw an exception if HookRegistry.dll is not found.
+                HookRegistry.Get();
+
                 // Read all hook functions into memory
                 var hookEntries = ReadHooksFile(hookFilePath);
                 Console.Out.WriteLine("[INFO]\tParsed {0} hook entries", hookEntries.Count);
 
-                foreach (var s in new[] { "Assembly-CSharp-firstpass", "Assembly-CSharp" })
+                // Initialise the class AssemblyStore
+                // All assemblies are directly loaded and parsed from their target location
+                var asStore = AssemblyStore.Get(dataPath);
+
+                // Loop all libraries looking for methods to hook       ! important - core
+                // Library is a reference to the filename of the assembly file containing the actual
+                // code we want to patch.
+                foreach (AssemblyStore.LIB_TYPE library in AssemblyStore.GetAllLibraryTypes())
                 {
-                    var inStream = File.Open(s + ".dll", FileMode.Open, FileAccess.Read);
-                    var scriptAssembly = AssemblyDefinition.ReadAssembly(inStream);
-                    var hooker = new Hooker(scriptAssembly.MainModule);
-                    // Simplified hooking
-                    foreach (var hook in hookEntries)
+                    // Skip invalid lib!
+                    if (library == AssemblyStore.LIB_TYPE.INVALID) continue;
+
+                    // Full path to current assembly
+                    string libraryPath = library.GetPath();
+                    // Full path to processed assembly
+                    string libraryOutPath = library.GetPathOut();
+
+                    // If the target file already exists, skip it..
+                    // This prevents the error of not being able to overwrite the file
+                    //if (File.Exists(libraryOutPath))
+                    //{
+                    //    Console.WriteLine("[INFO]\tThe out file for {0} already exists and parsing it will be skipped.\n" +
+                    //        "Make sure to delete the file '{1}' before running this program!", libraryPath, libraryOutPath);
+                    //    continue;
+                    //}
+
+                    // Load the assembly file
+                    AssemblyDefinition assembly;
+                    AssemblyStore.GetAssembly(library, out assembly);
+
+                    //if (assembly.CheckPatchMark())
+                    //{
+                    //    Console.WriteLine("[INFO]\tThe file {0} is already patched and will be skipped!\n" +
+                    //        "Restore the original library before running this program to patch it again.", libraryPath);
+                    //    continue;
+                    //}
+
+                    // Construct a hooker wrapper around the main Module of the assembly.
+                    // The wrapper facilitates hooking into method calls.
+                    ModuleDefinition mainModule = assembly.MainModule;
+                    Hooker wrapper = new Hooker(mainModule);
+                    Console.WriteLine("[INFO]\tParsing {0}..", libraryPath);
+
+                    // Loop each hook entry looking for registered types and methods
+                    foreach (HOOK_ENTRY hookEntry in hookEntries)
                     {
-                        hooker.AddHookBySuffix(hook.TypeName, hook.MethodName);
+                        try
+                        {
+                            wrapper.AddHookBySuffix(hookEntry.TypeName, hookEntry.MethodName);
+                        }
+                        catch (MissingMethodException)
+                        {
+                            //Console.WriteLine("[DEBUG]\tThere was no function found by the name '{0}.{1}', this entry will be ignored!",
+                            //    hookEntry.TypeName, hookEntry.FunctionName);
+                        }
                     }
 
-                    scriptAssembly.Write(s + ".out.dll");
-                }
-
-                foreach (var assemblyName in new[] { "Assembly-CSharp", "Assembly-CSharp-firstpass", "HookRegistry", "Newtonsoft.Json" })
-                {
-                    var srcName = assemblyName + ".dll";
-                    if (File.Exists(assemblyName + ".out.dll"))
+                    try
                     {
-                        srcName = assemblyName + ".out.dll";
+                        // Save the manipulated assembly
+                        library.Save();
+
+                        // Do NOT overwrite the original file with the new one !
+                        // File.Copy(libraryOutPath, libraryPath, true);
                     }
-                    File.Copy(srcName, Path.Combine(dataPath, @"Managed", assemblyName + ".dll"), true);
-                }
+                    catch (IOException)
+                    {
+                        // The file could be locked! Notify user.
+                        // .. or certain libraries could not be resolved..
+                        var msg = String.Format("An error occurred while trying to write to file '{0}'.\n" +
+                            "The file is possibly locked, make sure no other program is using it!", libraryOutPath);
+
+                        // If the outfile exists, remove it because it's most likely empty
+                        if (File.Exists(libraryOutPath))
+                        {
+                            // This function normally results in a null operation if the file does not exist,
+                            // but we checked if the file existed manually anyway!
+                            File.Delete(libraryOutPath);
+                        }
+
+                        throw;
+                    }
+                } // End foreach LIB_TYPE
+
+                // Do not copy needed files to target datadirectory      !
+                //foreach (var assemblyName in new[] { "Assembly-CSharp", "Assembly-CSharp-firstpass", "HookRegistry", "Newtonsoft.Json" })
+                //{
+                //    var srcName = assemblyName + ".dll";
+                //    if (File.Exists(assemblyName + ".out.dll"))
+                //    {
+                //        srcName = assemblyName + ".out.dll";
+                //    }
+                //    File.Copy(srcName, Path.Combine(dataPath, @"Managed", assemblyName + ".dll"), true);
+                //}
 
             }
             catch (Exception e)
