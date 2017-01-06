@@ -10,6 +10,10 @@ namespace Hooks
 {
     public class HookRegistry
     {
+        // Represents UnityEngine.Debug.Log(string).
+        // Usage: _LogMethod.Invoke(null, new[]{messagestring})
+        MethodInfo _LogMethod;
+
         // Method signature definition.
         // This thing defines the needed structure for a certain function call.
         // In our case it's the signature of a onCall(..) function defined in each hook class.
@@ -30,6 +34,8 @@ namespace Hooks
                 _instance = new HookRegistry();
                 // Initialise the assembly store.
                 _instance.InitAssemblies();
+                // Load assembly data for dynamic calls
+                _instance.PrepareDynamicCalls();
                 // Setup all hook information
                 _instance.LoadRuntimeHooks();
 
@@ -46,6 +52,28 @@ namespace Hooks
             var assemblyDirPath = System.IO.Path.GetDirectoryName(assemblyPath);
             // No exception occurs if the store was already initialised
             AssemblyStore.Get(assemblyDirPath);
+        }
+
+        // Load necessary types for dynamic method calls
+        private void PrepareDynamicCalls()
+        {
+            // Prepare dynamic call to Unity
+            Assembly unityAssembly = Assembly.LoadFrom(AssemblyStore.GetAsemblyPath(AssemblyStore.LIB_TYPE.UNITY_ENGINE));
+            var unityType = unityAssembly.GetType("UnityEngine.Debug");
+            _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
+        }
+
+        // Wrapper around the log method from unity.
+        // This method writes to the log file of the unity game
+        public void Log(string message)
+        {
+            if (_LogMethod != null)
+            {
+                // Create a nice format before printing to log
+                var logmessage = String.Format("[HOOKER]\t{0}", message);
+
+                _LogMethod.Invoke(null, new[] { logmessage });
+            }
         }
 
         // First function called by modified libraries.
@@ -117,7 +145,8 @@ namespace Hooks
 
             // Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
             // This method prints into the game log
-            //Debug.Log(String.Format("{0}.{1}(...)", typeName, methodName));
+            var message = String.Format("{0}.{1}(...)", typeName, methodName);
+            Log(message);
 
             // Execute each hook, because we don't know which one to actually target
             foreach (var cb in callbacks)
