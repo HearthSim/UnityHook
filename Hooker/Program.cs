@@ -88,17 +88,19 @@ namespace Hooker
 
             try
             {
-                // Load the Hookregistery class. 
-                // This operation will throw an exception if HookRegistry.dll is not found.
-                HookRegistry.Get();
-
                 // Read all hook functions into memory
                 var hookEntries = ReadHooksFile(hookFilePath);
                 Console.Out.WriteLine("[INFO]\tParsed {0} hook entries", hookEntries.Count);
 
-                // Initialise the class AssemblyStore
-                // All assemblies are directly loaded and parsed from their target location
+                // Initialise the AssemblyStore with the given path.
+                // All assemblies are directly loaded and parsed from their own location.
+                // The store must be initialised before HookRegistry, because hookregistry also initialises
+                // the store!
                 var asStore = AssemblyStore.Get(dataPath);
+
+                // Load the Hookregistery class. 
+                // This operation will throw an exception if HookRegistry.dll is not found.
+                HookRegistry.Get();
 
                 // Loop all libraries looking for methods to hook       ! important - core
                 // Library is a reference to the filename of the assembly file containing the actual
@@ -139,12 +141,15 @@ namespace Hooker
                     Hooker wrapper = new Hooker(mainModule);
                     Console.WriteLine("[INFO]\tParsing {0}..", libraryPath);
 
+                    // Keep track of hooked methods
+                    bool isHooked = false;
                     // Loop each hook entry looking for registered types and methods
                     foreach (HOOK_ENTRY hookEntry in hookEntries)
                     {
                         try
                         {
                             wrapper.AddHookBySuffix(hookEntry.TypeName, hookEntry.MethodName);
+                            isHooked = true;
                         }
                         catch (MissingMethodException)
                         {
@@ -155,8 +160,12 @@ namespace Hooker
 
                     try
                     {
-                        // Save the manipulated assembly
-                        library.Save();
+                        // Only save if the file actually changed!
+                        if (isHooked)
+                        {
+                            // Save the manipulated assembly
+                            library.Save();
+                        }
 
                         // Do NOT overwrite the original file with the new one !
                         // File.Copy(libraryOutPath, libraryPath, true);
