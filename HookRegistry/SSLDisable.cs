@@ -4,7 +4,6 @@
 // it is disabled by default.
 // To enable this hook, add "BattleNetCSharp.Init" to example_hooks
 
-using bgs;
 
 namespace Hooks
 {
@@ -28,18 +27,20 @@ namespace Hooks
 			if (reentrant)
 				return null;
 
-			reentrant = true;
+            //reentrant = true;
 
-			var bnet = (BattleNetCSharp)thisObj;
+            //var bnet = (BattleNetCSharp)thisObj;
 
-			// disable SSL
-			var sslParams = (SslParameters)args[4];
-			sslParams.useSsl = false;
+            //// disable SSL
+            //var sslParams = (SslParameters)args[4];
+            //sslParams.useSsl = false;
 
-			// perform the real call
-			bool result = bnet.Init((bool)args[0], (string)args[1], (string)args[2], (int)args[3], sslParams);
+            //// perform the real call
+            //bool result = bnet.Init((bool)args[0], (string)args[1], (string)args[2], (int)args[3], sslParams);
 
-			return result;
+            //return result;
+
+            return null;
 		}
 	}
 }

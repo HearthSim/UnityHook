@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
-using UnityEngine;
 
 [assembly: AssemblyTitle("HookRegistry")]
 [assembly: AssemblyVersion("1.0.0.0")]
@@ -51,7 +50,7 @@ namespace Hooks
 			var method = MethodBase.GetMethodFromHandle(rmh);
 			var typeName = method.DeclaringType.FullName;
 			var methodName = method.Name;
-			Debug.Log(String.Format("{0}.{1}(...)", typeName, methodName));
+			//Debug.Log(String.Format("{0}.{1}(...)", typeName, methodName));
 			foreach (var cb in callbacks)
 			{
 				var o = cb(typeName, methodName, thisObj, args);

@@ -3,3 +3,4 @@ BattleNet..cctor
 BattleNetCSharp.AuroraStateHandler_WaitForLogon
 BattleNetCSharp.GetLaunchOption
 Network.GetBattlePayConfigResponse
+BattleNetCSharp.Init
