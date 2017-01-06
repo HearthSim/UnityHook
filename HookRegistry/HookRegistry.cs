@@ -58,7 +58,7 @@ namespace Hooks
         private void PrepareDynamicCalls()
         {
             // Prepare dynamic call to Unity
-            Assembly unityAssembly = Assembly.LoadFrom(AssemblyStore.GetAsemblyPath(AssemblyStore.LIB_TYPE.UNITY_ENGINE));
+            Assembly unityAssembly = Assembly.LoadFrom(AssemblyStore.GetAssemblyPath(AssemblyStore.LIB_TYPE.UNITY_ENGINE));
             var unityType = unityAssembly.GetType("UnityEngine.Debug");
             _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
         }
