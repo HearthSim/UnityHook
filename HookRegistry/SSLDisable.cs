@@ -37,7 +37,7 @@ namespace Hooks
 			sslParams.useSsl = false;
 
 			// perform the real call
-			bool result = bnet.Init((bool)args[0], (string)args[1], (string)args[2], (int)args[3], sslParams, (ClientInterface)args[5]);
+			bool result = bnet.Init((bool)args[0], (string)args[1], (string)args[2], (int)args[3], sslParams);
 
 			return result;
 		}
