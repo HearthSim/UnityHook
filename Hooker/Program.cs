@@ -77,12 +77,12 @@ namespace Hooker
             // us and that does not look pretty..
             if (Directory.Exists(dataPath) != true)
             {
-                Console.WriteLine("[ERROR]\tThe data directory path '{0}' does not exist.", dataPath);
+                Console.WriteLine("[ERROR]\tThe data directory path `{0}` does not exist.", dataPath);
                 goto ERROR;
             }
             if (File.Exists(hookFilePath) != true)
             {
-                Console.WriteLine("[ERROR]\tThe hooks filepath '{0}' does not exist.", hookFilePath);
+                Console.WriteLine("[ERROR]\tThe hooks filepath `{0}` does not exist.", hookFilePath);
                 goto ERROR;
             }
 
@@ -139,7 +139,7 @@ namespace Hooker
                     // The wrapper facilitates hooking into method calls.
                     ModuleDefinition mainModule = assembly.MainModule;
                     Hooker wrapper = new Hooker(mainModule);
-                    Console.WriteLine("[INFO]\tParsing {0}..", libraryPath);
+                    Console.WriteLine("[INFO]\tParsing `{0}`..", libraryPath);
 
                     // Keep track of hooked methods
                     bool isHooked = false;
@@ -174,7 +174,7 @@ namespace Hooker
                     {
                         // The file could be locked! Notify user.
                         // .. or certain libraries could not be resolved..
-                        var msg = String.Format("An error occurred while trying to write to file '{0}'.\n" +
+                        var msg = String.Format("An error occurred while trying to write to file `{0}`. " +
                             "The file is possibly locked, make sure no other program is using it!", libraryOutPath);
 
                         // If the outfile exists, remove it because it's most likely empty
@@ -188,17 +188,6 @@ namespace Hooker
                         throw;
                     }
                 } // End foreach LIB_TYPE
-
-                // Do not copy needed files to target datadirectory      !
-                //foreach (var assemblyName in new[] { "Assembly-CSharp", "Assembly-CSharp-firstpass", "HookRegistry", "Newtonsoft.Json" })
-                //{
-                //    var srcName = assemblyName + ".dll";
-                //    if (File.Exists(assemblyName + ".out.dll"))
-                //    {
-                //        srcName = assemblyName + ".out.dll";
-                //    }
-                //    File.Copy(srcName, Path.Combine(dataPath, @"Managed", assemblyName + ".dll"), true);
-                //}
 
             }
             catch (Exception e)

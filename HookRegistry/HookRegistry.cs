@@ -112,28 +112,6 @@ namespace Hooks
                     activeHooks.Add(type.GetConstructor(Type.EmptyTypes).Invoke(new object[0]));
                 }
             }
-
-            //// We bring our own booze.. dependancies! By using Mono.Cecil
-            //AssemblyDefinition thisAssembly;
-            //AssemblyHelper.LoadAssembly(typeof(HookRegistry).Module.FullyQualifiedName, out thisAssembly);
-
-            //// Infer reference type of Hook attribute class
-            //TypeReference hookTypeRef = thisAssembly.MainModule.Import(typeof(RuntimeHookAttribute));
-            //// Loop all types in our assembly
-            //foreach (TypeDefinition typeDefinition in thisAssembly.MainModule.Types)
-            //{
-            //    // Loop all attributes of this type
-            //    foreach (CustomAttribute attr in typeDefinition.CustomAttributes)
-            //    {
-            //        if (attr.AttributeType.Equals(hookTypeRef))
-            //        { // Attribute match! This contains hook code.
-            //            // Create an instance of this type through the empty param constructor
-            //            object instance = typeDefinition.GetType().GetConstructor(Type.EmptyTypes).Invoke(new object[] { });
-            //            // Store the instance
-            //            activeHooks.Add(instance);
-            //        }
-            //    }
-            //}
         }
 
         // Call each hook object and return it's response.
@@ -145,7 +123,7 @@ namespace Hooks
 
             // Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
             // This method prints into the game log
-            var message = String.Format("{0}.{1}(...)", typeName, methodName);
+            var message = String.Format("Called by `{0}.{1}(...)`", typeName, methodName);
             Log(message);
 
             // Execute each hook, because we don't know which one to actually target
