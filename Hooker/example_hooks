@@ -1,6 +1,6 @@
-GameState.OnPowerHistory
-BattleNet..cctor
-BattleNetCSharp.AuroraStateHandler_WaitForLogon
-BattleNetCSharp.GetLaunchOption
-Network.GetBattlePayConfigResponse
-BattleNetCSharp.Init
+//GameState::OnPowerHistory
+//BattleNet::.cctor
+//BattleNetCSharp::AuroraStateHandler_WaitForLogon
+//BattleNetCSharp::GetLaunchOption
+//Network::GetBattlePayConfigResponse
+BattleNetCSharp::Init
