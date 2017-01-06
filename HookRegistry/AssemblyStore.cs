@@ -33,6 +33,9 @@ namespace Hooks
                 "UnityEngine.dll"
             };
 
+        // Indicates if the libraries are loaded (on first retrieval) or not
+        private bool _libsLoaded = false;
+
         // Path to the directory provided to this object on initialisation
         private static string _dataPath { get; set; }
 
@@ -66,12 +69,12 @@ namespace Hooks
         }
 
         // Load the ModuleDefinitions of all assemblies from assemblyFileNames
-        private void LoadAssemblies(string dataPath)
+        private void LoadAssemblies()
         {
             // Construct a resolver that finds other assemblies linked by the 
             // ones we try to load.
             var resolver = new DefaultAssemblyResolver();
-            resolver.AddSearchDirectory(dataPath);
+            resolver.AddSearchDirectory(_dataPath);
             // The resolver gets passed in a set of parameters
             var loadParams = new ReaderParameters();
             loadParams.AssemblyResolver = resolver;
@@ -87,7 +90,7 @@ namespace Hooks
                 // Construct the full path to the library.
                 // The int representation of the enum is the index of the matching filename.
                 var libFileName = _assemblyFileNames[(int)enumVal];
-                var libFullPath = Path.Combine(dataPath, libFileName);
+                var libFullPath = Path.Combine(_dataPath, libFileName);
 
                 // Load the Assembly definition.
                 // This 'loading' doesn't actually copy the library into our App domain, but a blueprint 
@@ -97,8 +100,7 @@ namespace Hooks
                 _assemblies.Add(enumVal, assemblyDefinition);
             }
 
-            // Save the dataPath for future reference
-            _dataPath = dataPath;
+            _libsLoaded = true;
         }
 
         // Access the one and only instance of this class
@@ -112,7 +114,8 @@ namespace Hooks
                 }
 
                 _thisObject = new AssemblyStore();
-                _thisObject.LoadAssemblies(dataPath);
+                // Save the dataPath for future reference
+                _dataPath = dataPath;
             }
 
             return _thisObject;
@@ -124,6 +127,12 @@ namespace Hooks
             if (_thisObject == null)
             {
                 throw new InvalidOperationException("The class AssemblyStore has not been initialised!");
+            }
+
+            // Assemblies are loaded on first retrieval
+            if (Get()._libsLoaded != true)
+            {
+                Get().LoadAssemblies();
             }
 
             // Try to fetch the correct definition from the map. The returned value (from the map) will be put
@@ -144,6 +153,11 @@ namespace Hooks
         // Get the full path to the file of the requested library
         public static string GetAssemblyPath(LIB_TYPE lib)
         {
+            if (_thisObject == null)
+            {
+                throw new InvalidOperationException("The class AssemblyStore has not been initialised!");
+            }
+
             int fileNameIdx = (int)lib;
             // Prevent IndexOutOfBounds by testing the value of lib
             if (fileNameIdx < 1 || fileNameIdx >= _assemblyFileNames.Length)
