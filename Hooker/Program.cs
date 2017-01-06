@@ -128,12 +128,12 @@ namespace Hooker
                     AssemblyDefinition assembly;
                     AssemblyStore.GetAssembly(library, out assembly);
 
-                    //if (assembly.CheckPatchMark())
-                    //{
-                    //    Console.WriteLine("[INFO]\tThe file {0} is already patched and will be skipped!\n" +
-                    //        "Restore the original library before running this program to patch it again.", libraryPath);
-                    //    continue;
-                    //}
+                    if (assembly.HasPatchMark())
+                    {
+                        Console.WriteLine("[INFO]\tThe file `{0}` is already patched and will be skipped! " +
+                            "Restore the original library before running this program to patch it again.", libraryPath);
+                        continue;
+                    }
 
                     // Construct a hooker wrapper around the main Module of the assembly.
                     // The wrapper facilitates hooking into method calls.

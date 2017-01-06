@@ -212,7 +212,7 @@ namespace Hooks
         }
 
         // Returns true if the patchmark is detected
-        public static bool CheckPatchMark(this AssemblyDefinition assembly)
+        public static bool HasPatchMark(this AssemblyDefinition assembly)
         {
             string fullTokenName = String.Format("{0}.{1}", AssemblyStore.TokenNamespace, AssemblyStore.TokenIsPatched);
             // Look for the token in the given assembly (the Linq system is useful here)
