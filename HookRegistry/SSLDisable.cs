@@ -30,7 +30,7 @@ namespace Hooks
         private void PrepareDynamicCalls()
         {
             // Prepare dynamic call to Unity
-            Assembly libAssembly = Assembly.LoadFrom(AssemblyStore.GetAsemblyPath(AssemblyStore.LIB_TYPE.LIB_CSHARP_FIRSTPASS));
+            Assembly libAssembly = Assembly.LoadFrom(AssemblyStore.GetAssemblyPath(AssemblyStore.LIB_TYPE.LIB_CSHARP_FIRSTPASS));
             TypeSslParams = libAssembly.GetType("bgs.SslParameters");
             TypeBattleNetC = libAssembly.GetType("bgs.BattleNetCSharp");
         }

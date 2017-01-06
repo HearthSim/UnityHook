@@ -142,7 +142,7 @@ namespace Hooks
         }
 
         // Get the full path to the file of the requested library
-        public static string GetAsemblyPath(LIB_TYPE lib)
+        public static string GetAssemblyPath(LIB_TYPE lib)
         {
             int fileNameIdx = (int)lib;
             // Prevent IndexOutOfBounds by testing the value of lib
@@ -208,7 +208,7 @@ namespace Hooks
         // Fetch the original location of the given library
         public static string GetPath(this AssemblyStore.LIB_TYPE lib)
         {
-            return AssemblyStore.GetAsemblyPath(lib);
+            return AssemblyStore.GetAssemblyPath(lib);
         }
 
         // Constructs an outpath string for the given assembly
@@ -221,7 +221,7 @@ namespace Hooks
                 throw new ArgumentException("Argument path '{0}' does not exist!", directory);
             }
 
-            string fullPath = AssemblyStore.GetAsemblyPath(lib);
+            string fullPath = AssemblyStore.GetAssemblyPath(lib);
             // Construct a new filename for the manipulated assembly
             string file = Path.GetFileNameWithoutExtension(fullPath);
             // We know for sure that the extension is .dll
