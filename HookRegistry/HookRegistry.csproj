@@ -30,25 +30,11 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="BundleExporter.cs" />
     <Compile Include="HookRegistry.cs" />
-    <Compile Include="JsonHistLogger.cs" />
     <Compile Include="SSLDisable.cs" />
-    <Compile Include="UseWebAuth.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="System">
-      <HintPath>..\lib\System.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>..\lib\UnityEngine.dll</HintPath>
-    </Reference>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>..\lib\Assembly-CSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>..\lib\Assembly-CSharp-firstpass.dll</HintPath>
-    </Reference>
+    <Reference Include="System.XML" />
     <Reference Include="Newtonsoft.Json">
       <HintPath>..\lib\Newtonsoft.Json.dll</HintPath>
     </Reference>
