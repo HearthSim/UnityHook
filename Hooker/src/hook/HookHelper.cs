@@ -239,10 +239,6 @@ namespace Hooker
                     var path = typeof(IOException).GetField("_maybeFullPath", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase)?.GetValue(e);
                     Program.Log.Exception(ERR_WRITE_FILE, null, e?.ToString());
 
-                    // If the outfile exists, remove it because it's most likely empty.
-                    // This method will not throw if the file does not exist!
-                    File.Delete(libraryOutPath);
-
                     throw;
                 }
             } // End foreach LIB_TYPE

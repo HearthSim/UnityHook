@@ -47,14 +47,14 @@
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyStore.cs" />
-    <Compile Include="hook\Hooker.cs" />
-    <Compile Include="hook\HookHelper.cs" />
-    <Compile Include="util\Logger.cs" />
-    <Compile Include="util\Options.cs" />
-    <Compile Include="Program.cs" />
+    <Compile Include="src\AssemblyStore.cs" />
+    <Compile Include="src\hook\Hooker.cs" />
+    <Compile Include="src\hook\HookHelper.cs" />
+    <Compile Include="src\util\Logger.cs" />
+    <Compile Include="src\util\Options.cs" />
+    <Compile Include="src\Program.cs" />
     <Compile Include="properties\AssemblyInfo.cs" />
-    <Compile Include="hook\Restore.cs" />
+    <Compile Include="src\hook\Restore.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="example_hooks" />
