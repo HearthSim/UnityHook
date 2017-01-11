@@ -30,8 +30,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="HookRegistry.cs" />
-    <Compile Include="SSLDisable.cs" />
+    <Compile Include="src\HookRegistry.cs" />
+    <Compile Include="src\SSLDisable.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Mono.Cecil">
