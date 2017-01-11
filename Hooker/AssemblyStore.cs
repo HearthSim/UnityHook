@@ -8,7 +8,7 @@ namespace Hooks
 {
     public class AssemblyStore
     {
-        // Handle for selecting the correct AssemblyDefinition; see XXXXX
+        // Handle for selecting the correct AssemblyDefinition; see _assemblyFileNames
         // Force the underlying type to be integer.
         public enum LIB_TYPE : int
         {
@@ -18,13 +18,6 @@ namespace Hooks
             UNITY_ENGINE
         }
 
-        // String to append after assembly filename and before the extension
-        public const string AssemblyOutAffix = ".out";
-        // A mark indicating that the targetted assembly has been patched already
-        public const string TokenIsPatched = "__AS_assembly_patched";
-        // The namespace to introduce new types into
-        public const string TokenNamespace = "Hooks";
-
         // File names of all assemblies, with dll extension, matching LIB_TYPE index
         private static string[] _assemblyFileNames = new string[] {
                 "",
@@ -32,6 +25,15 @@ namespace Hooks
                 "Assembly-CSharp-firstpass.dll",
                 "UnityEngine.dll"
             };
+
+        // String to append after assembly filename and before the extension. This is used for HOOKED assemblies.
+        public const string AssemblyOutAffix = ".out";
+        // String to append after assembly filename and before the extension. This is used for ORIGINAL assemblies.
+        public const string AssemblyBackupAffix = ".original";
+        // A mark indicating that the targetted assembly has been patched already
+        public const string TokenIsPatched = "__AS_assembly_patched";
+        // The namespace to introduce new types into
+        public const string TokenNamespace = "Hooks";
 
         // Indicates if the libraries are loaded (on first retrieval) or not
         private bool _libsLoaded = false;
@@ -247,6 +249,28 @@ namespace Hooks
             return newFullPath;
         }
 
+        // Constructs an backup path string for the given assembly
+        // An optional directory can be provided where the assembly file will be stored. The resulting path
+        // will be next to the original file if no path is given.
+        public static string GetPathBackup(this AssemblyStore.LIB_TYPE lib, string directory = null)
+        {
+            if (directory != null && !Directory.Exists(directory))
+            {
+                throw new ArgumentException("Argument path '{0}' does not exist!", directory);
+            }
+
+            string fullPath = AssemblyStore.GetAssemblyPath(lib);
+            // Construct a new filename for the manipulated assembly
+            string file = Path.GetFileNameWithoutExtension(fullPath);
+            // We know for sure that the extension is .dll
+            string newFileName = file + AssemblyStore.AssemblyBackupAffix + ".dll";
+            string dir = (directory != null) ? directory : Path.GetDirectoryName(fullPath);
+            // Construct a new full path for the manipulated assembly
+            string newFullPath = Path.Combine(dir, newFileName);
+
+            return newFullPath;
+        }
+
         public static void Save(this AssemblyStore.LIB_TYPE lib)
         {
             // Get the assembly
@@ -261,6 +285,24 @@ namespace Hooks
             (assDefinition.MainModule.AssemblyResolver as BaseAssemblyResolver).AddSearchDirectory(AssemblyStore.DataPath);
             // Store the assembly
             assDefinition.Write(assOutPath);
+        }
+
+        public static void Backup(this AssemblyStore.LIB_TYPE lib)
+        {
+            // Get the original path
+            string path = GetPath(lib);
+            // Get the backup path
+            string backupPath = GetPathBackup(lib);
+            // Copy the file to the backup location
+            // but do NOT overwrite if it already exists!
+            try
+            {
+                // This throws if the file already exists.
+                File.Copy(path, backupPath, false);
+            } catch (Exception)
+            {
+                // Do nothing
+            }
         }
     }
 }
