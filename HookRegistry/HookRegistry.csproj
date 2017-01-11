@@ -34,9 +34,6 @@
     <Compile Include="src\SSLDisable.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Mono.Cecil">
-      <HintPath>..\lib\Mono.Cecil.dll</HintPath>
-    </Reference>
     <Reference Include="System.XML" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
