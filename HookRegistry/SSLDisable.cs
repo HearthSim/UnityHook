@@ -6,6 +6,7 @@
 
 
 using System;
+using System.IO;
 using System.Reflection;
 
 namespace Hooks
@@ -30,7 +31,9 @@ namespace Hooks
         private void PrepareDynamicCalls()
         {
             // Prepare dynamic call to Unity
-            Assembly libAssembly = Assembly.LoadFrom(AssemblyStore.GetAssemblyPath(AssemblyStore.LIB_TYPE.LIB_CSHARP_FIRSTPASS));
+            // Load from assembly file at currently executing path
+            var loc = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_UNITY_NAME);
+            Assembly libAssembly = Assembly.LoadFrom(loc);
             TypeSslParams = libAssembly.GetType("bgs.SslParameters");
             TypeBattleNetC = libAssembly.GetType("bgs.BattleNetCSharp");
         }
@@ -70,7 +73,7 @@ namespace Hooks
             catch (Exception e)
             {
                 // Write meaningful information to the game output
-                var message = String.Format("BattleNetCSharp.Init(..) failed for the following reason\n{0}\n{1}", e.Message, e.StackTrace);
+                var message = String.Format("BattleNetCSharp.Init(..) failed for the following reason: {0}\n{1}", e.Message, e.StackTrace);
                 HookRegistry.Get().Log(message);
 
                 // Make the game crash!

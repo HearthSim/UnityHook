@@ -32,6 +32,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="CommandLine, Version=1.9.71.2, Culture=neutral, PublicKeyToken=de6f01bd326f8c32, processorArchitecture=MSIL">
+      <HintPath>..\packages\CommandLineParser.1.9.71\lib\net40\CommandLine.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Mono.Cecil">
       <HintPath>..\lib\Mono.Cecil.dll</HintPath>
     </Reference>
@@ -43,17 +47,18 @@
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Hooker.cs" />
+    <Compile Include="AssemblyStore.cs" />
+    <Compile Include="hook\Hooker.cs" />
+    <Compile Include="hook\HookHelper.cs" />
+    <Compile Include="util\Logger.cs" />
+    <Compile Include="util\Options.cs" />
     <Compile Include="Program.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\HookRegistry\HookRegistry.csproj">
-      <Project>{2182CF16-EAFC-45FA-B4FB-274D05EB027E}</Project>
-      <Name>HookRegistry</Name>
-    </ProjectReference>
+    <Compile Include="properties\AssemblyInfo.cs" />
+    <Compile Include="hook\Restore.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="example_hooks" />
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

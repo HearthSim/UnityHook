@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 
 [assembly: AssemblyTitle("HookRegistry")]
@@ -18,6 +19,12 @@ namespace Hooks
         // This thing defines the needed structure for a certain function call.
         // In our case it's the signature of a onCall(..) function defined in each hook class.
         public delegate object Callback(string typeName, string methodName, object thisObj, object[] args);
+
+        // The path where the currently executing library can be found.
+        public static string LibLocation { get; private set; }
+        public const string LIB_UNITY_NAME = "UnityEngine.dll";
+        public const string LIB_CSHARP_NAME = "Assembly-CSharp.dll";
+        public const string LIB_CSHARP_FIRSTP_NAME = "Assembly-CSharp-firstpass.dll";
 
         // All callback functions registered to with this object
         List<Callback> callbacks = new List<Callback>();
@@ -48,19 +55,30 @@ namespace Hooks
         private void InitAssemblies()
         {
             // All necessary libraries should be next to this assembly file.
+            // GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
+            // it will return the location of the Assembly DOING the incovation!
             var assemblyPath = Assembly.GetExecutingAssembly().Location;
-            var assemblyDirPath = System.IO.Path.GetDirectoryName(assemblyPath);
-            // No exception occurs if the store was already initialised
-            AssemblyStore.Get(assemblyDirPath);
+            var assemblyDirPath = Path.GetDirectoryName(assemblyPath);
+            LibLocation = assemblyDirPath;
         }
 
         // Load necessary types for dynamic method calls
         private void PrepareDynamicCalls()
         {
-            // Prepare dynamic call to Unity
-            Assembly unityAssembly = Assembly.LoadFrom(AssemblyStore.GetAssemblyPath(AssemblyStore.LIB_TYPE.UNITY_ENGINE));
-            var unityType = unityAssembly.GetType("UnityEngine.Debug");
-            _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
+            // We must design this function around failing, because our locationstring is not 100% thrustworthy
+            // nor is there any guarantee that de requested libraries are in the same folder!
+            // EG When dynamically invoking Get(..) from the Hooker project, this fails.
+            // When hooking, it's not necessary to have the game libraries be next to this assembly.
+            try
+            {
+                // Prepare dynamic call to Unity
+                Assembly unityAssembly = Assembly.LoadFrom(Path.Combine(LibLocation, LIB_UNITY_NAME));
+                var unityType = unityAssembly.GetType("UnityEngine.Debug");
+                _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
+            } catch (Exception)
+            {
+                // Do nothing
+            }
         }
 
         // Wrapper around the log method from unity.
@@ -71,7 +89,6 @@ namespace Hooks
             {
                 // Create a nice format before printing to log
                 var logmessage = String.Format("[HOOKER]\t{0}", message);
-
                 _LogMethod.Invoke(null, new[] { logmessage });
             }
         }

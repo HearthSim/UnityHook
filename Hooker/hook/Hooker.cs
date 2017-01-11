@@ -10,24 +10,48 @@ namespace Hooker
 {
     class Hooker
     {
+        public const string HOOKED_METHOD = "\tMethod `{0}` hooked.";
+        public const string HOOK_PROBLEM = "A problem occurred while hooking `{0}`: {1}\n" + "Hooking will continue!";
+
+        // The library to hook
         public ModuleDefinition Module { get; private set; }
-        TypeReference hookRegistryType;
-        TypeReference rmhType;
-        MethodReference onCallMethod;
+        // Method that gets called when entering a hooked method
+        private MethodReference onCallMethodRef;
+        // MethodHandle is a utility type to get method information at runtime
+        private TypeReference rmhTypeRef;
 
-        public Hooker(ModuleDefinition module)
+        private Hooker()
+        {            
+        }
+
+        public static Hooker New(ModuleDefinition module, HookSubOptions options)
         {
-            Module = module;
+            /* 
+             * These things have to be recreated for every module! 
+             * This is because a reference is specifically generated from a certain module and cannot be reused
+             * by another module!             
+             */
 
-            Type _hookRegistryType = typeof(Hooks.HookRegistry);
-
-            hookRegistryType = Module.Import(_hookRegistryType);
-            rmhType = Module.Import(typeof(System.RuntimeMethodHandle));
+            // Fetch types and references
+            Type _hookRegistryType = options.HookRegistryType;
+            var rmhTypeRef = module.Import(typeof(System.RuntimeMethodHandle));
             // Look for the HookRegistry.onCall(..) method
-            onCallMethod = Module.Import(_hookRegistryType.GetMethods().First(mi => mi.Name.Equals("OnCall")));
-            // By adding a new reference to our HookRegistry module, we are certain
-            // that the Module (-subject) can resolve the calls to our hooks
-            Module.AssemblyReferences.Add(new AssemblyNameReference("HookRegistry", new Version(1, 0, 0, 0)));
+            var onCallMethodRef = module.Import(_hookRegistryType.GetMethods().First(mi => mi.Name.Equals("OnCall")));
+            // The (reference) name for in the manifest of the hooked library. The runtime loads all referenced libraries
+            // into application domain. Once in application domain, methods and types can resolve.
+            var hrAssemblyName = AssemblyNameReference.Parse(_hookRegistryType.Assembly.FullName);
+            // By adding a new reference (pointing to our HookRegistry assembly), we are certain
+            // that Module can resolve the calls to our hooks.
+            module.AssemblyReferences.Add(hrAssemblyName);
+
+            var newObj = new Hooker
+            {
+                Module = module,
+                onCallMethodRef = onCallMethodRef,
+                rmhTypeRef = rmhTypeRef
+            };
+               
+            return newObj;
         }
 
         public void AddHookBySuffix(string typeName, string methodName)
@@ -63,6 +87,7 @@ namespace Hooker
                     {
                         // Hook our code into the body of this method
                         AddHook(method);
+                        Program.Log.Info(HOOKED_METHOD, method.FullName);
                         found = true;
                     }
                     catch (Exception e) // Yes, catch all exceptions
@@ -71,8 +96,7 @@ namespace Hooker
                         if (e is InvalidProgramException || e is InvalidOperationException)
                         {
                             // Report the problem to user directly ignoring the exception
-                            Console.WriteLine("[WARN]\tA problem occurred while hooking `{0}`: {1}", method.FullName, e.Message);
-                            Console.WriteLine("continuing..");
+                            Program.Log.Warn(HOOK_PROBLEM, method.FullName, e.Message);
                             continue;
                         }
 
@@ -116,7 +140,6 @@ namespace Hooker
             //      3. Call HookRegistry.OnCall( handle to original method, thisobject of method, arguments passed[])
             //      4. Return the value (if any) returned by our hooked function as the value of the targetted method
 
-            Console.WriteLine("[INFO]\tHooking method `{0}`", method);
             // object[] interceptedArgs;
             // object hookResult;
             var interceptedArgs = new VariableDefinition("interceptedArgs", method.Module.TypeSystem.Object.MakeArrayType());
@@ -152,15 +175,15 @@ namespace Hooker
                 hook.Add(Instruction.Create(OpCodes.Ldarg, param));
                 if (param.ParameterType.IsByReference)
                 {
-                    // if the arg is a reference type, it must be copied and boxed
+                    /// if the arg is a reference type, it must be copied and boxed
                     var refType = (ByReferenceType)param.ParameterType;
                     hook.Add(Instruction.Create(OpCodes.Ldobj, refType.ElementType));
                     hook.Add(Instruction.Create(OpCodes.Box, refType.ElementType));
                 }
                 else if (param.ParameterType.IsValueType)
                 {
-                    // if the arg descends from ValueType, it must be boxed to be
-                    // converted to an object:
+                    /// if the arg descends from ValueType, it must be boxed to be
+                    /// converted to an object:
                     hook.Add(Instruction.Create(OpCodes.Box, param.ParameterType));
                 }
                 hook.Add(Instruction.Create(OpCodes.Stelem_Ref));
@@ -168,7 +191,7 @@ namespace Hooker
             }
             // hookResult = HookRegistry.OnCall(rmh, thisObj, interceptedArgs);
             hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
-            hook.Add(Instruction.Create(OpCodes.Call, onCallMethod));
+            hook.Add(Instruction.Create(OpCodes.Call, onCallMethodRef));
             hook.Add(Instruction.Create(OpCodes.Stloc, hookResult));
             // if (hookResult != null) {
             //     return (ReturnType)hookResult;

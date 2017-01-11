@@ -60,3 +60,4 @@ lib/UnityEngine.dll
 lib/Assembly-CSharp.dll
 lib/Assembly-CSharp-firstpass.dll
 lib/System.dll
+packages/

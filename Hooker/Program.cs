@@ -1,5 +1,4 @@
-﻿using Hooks;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,204 +9,104 @@ namespace Hooker
 {
     class Program
     {
-        // This structure represents one line of text in our hooks file.
-        // It basically boils down to what function we target in which class.
-        public struct HOOK_ENTRY
+        // This path element will be added to the `gamedir` option.
+        // In case the necessary libraries are not located in the root directory of the game folder.
+        // The Unity libraries are located at "Hearthstone_Data\Managed", from the root of HS install folder
+        public const string REL_LIBRARY_PATH = "Hearthstone_Data\\Managed";
+
+        // Operation verbs
+        public const string OPERATION_HOOK = "hook";
+        public const string OPERATION_RESTORE = "restore";
+
+        public const string EXCEPTION_MSG = "An exception occurred and assemblies might be in inconsistent state. " +
+            "Please use the restore function to bring back the assemblies to original state!";
+
+        // The logger to use for communicating messages
+        public static Logger Log;
+
+        // Prepare the general options
+        public static void Prepare(GeneralOptions options)
         {
-            public string TypeName;
-            public string MethodName;
-        }
+            // Initialise new logger
+            Log = new Logger(options);
 
-        // The string used to split TypeName from FunctionName; see ReadHooksFile(..)
-        public const string HOOK_SPLIT = "::";
-
-        static List<HOOK_ENTRY> ReadHooksFile(string hooksFilePath)
-        {
-            var hookEntries = new List<HOOK_ENTRY>();
-
-            // Open and parse our hooks file.
-            // File.ReadLines needs at least framework 4.0
-            foreach (string line in File.ReadLines(hooksFilePath))
+            // Check the game path
+            var gamePath = Path.GetFullPath(options.GamePath);
+            // Append relative directory to library files
+            gamePath = Path.Combine(gamePath, REL_LIBRARY_PATH);
+            options.GamePath = gamePath;
+            if (!Directory.Exists(gamePath))
             {
-                // Remove all unnecessary whitespace
-                var lineTrimmed = line.Trim();
-                // Skip empty or comment lines
-                if (lineTrimmed.Length == 0 || lineTrimmed.IndexOf("//") == 0)
-                {
-                    continue;
-                }
-                // In our hooks file we use C++ style syntax to avoid parsing problems 
-                // regarding full names of Types and Methods. (namespaces!)
-                // Hook calls are now registered as FULL_TYPE_NAME::METHOD_NAME
-                // There are no methods registered without type, so this always works!
-                var breakIdx = lineTrimmed.IndexOf(HOOK_SPLIT);
-                // This is not a super robuust test, but it filters out the gross of 
-                // impossible values.
-                if (breakIdx != -1)
-                {
-                    // Create and store a new entry object
-                    hookEntries.Add(new HOOK_ENTRY
-                    {
-                        // From start to "::"
-                        TypeName = lineTrimmed.Substring(0, breakIdx),
-                        // After (exclusive) "::" to end
-                        MethodName = lineTrimmed.Substring(breakIdx + HOOK_SPLIT.Length),
-                    });
-                }
-
+                throw new DirectoryNotFoundException("Exe option `gamedir` is invalid!");
             }
-
-            return hookEntries;
         }
 
         static int Main(string[] args)
         {
-            if (args.Length < 2)
-            {
-                Console.WriteLine("Usage: Hooker.exe [GameName_Data directory] [hooks file]");
-                goto ERROR;
-            }
-            // Path to library directory of Game
-            var dataPath = args[0];
-            // Path to hooks file
-            var hookFilePath = args[1];
+            // Operation
+            string invokedOperation = "";
+            // Options for that operation
+            object invokedOperationOptions = null;
 
-            // Check parameters
-            // Do not throw exceptions! If we don't catch them at the same time the OS will do it for
-            // us and that does not look pretty..
-            if (Directory.Exists(dataPath) != true)
+            var opts = new Options();
+            // Must check for null, because the parser won't..
+            if (args == null || args.Length == 0)
             {
-                Console.WriteLine("[ERROR]\tThe data directory path `{0}` does not exist.", dataPath);
+                Console.WriteLine(opts.GetUsage("help"));
                 goto ERROR;
             }
-            if (File.Exists(hookFilePath) != true)
+            if (!CommandLine.Parser.Default.ParseArguments(args, opts,
+                (verb, subOptions) =>
+                {
+                    invokedOperation = verb;
+                    invokedOperationOptions = subOptions;
+                }))
             {
-                Console.WriteLine("[ERROR]\tThe hooks filepath `{0}` does not exist.", hookFilePath);
+                // The parser will have written usage information.
+                // This might happen because options were misspelled or not given.
                 goto ERROR;
             }
 
             try
             {
-                // Read all hook functions into memory
-                var hookEntries = ReadHooksFile(hookFilePath);
-                Console.Out.WriteLine("[INFO]\tParsed {0} hook entries", hookEntries.Count);
-
-                // Initialise the AssemblyStore with the given path.
-                // All assemblies are directly loaded and parsed from their own location.
-                // The store must be initialised before HookRegistry, because hookregistry also initialises
-                // the store!
-                var asStore = AssemblyStore.Get(dataPath);
-
-                // Load the Hookregistery class. 
-                // This operation will throw an exception if HookRegistry.dll is not found.
-                HookRegistry.Get();
-
-                // Loop all libraries looking for methods to hook       ! important - core
-                // Library is a reference to the filename of the assembly file containing the actual
-                // code we want to patch.
-                foreach (AssemblyStore.LIB_TYPE library in AssemblyStore.GetAllLibraryTypes())
-                {
-                    // Skip invalid lib!
-                    if (library == AssemblyStore.LIB_TYPE.INVALID) continue;
-
-                    // Full path to current assembly
-                    string libraryPath = library.GetPath();
-                    // Full path to processed assembly
-                    string libraryOutPath = library.GetPathOut();
-
-                    // If the target file already exists, skip it..
-                    // This prevents the error of not being able to overwrite the file
-                    //if (File.Exists(libraryOutPath))
-                    //{
-                    //    Console.WriteLine("[INFO]\tThe out file for {0} already exists and parsing it will be skipped.\n" +
-                    //        "Make sure to delete the file '{1}' before running this program!", libraryPath, libraryOutPath);
-                    //    continue;
-                    //}
-
-                    // Load the assembly file
-                    AssemblyDefinition assembly;
-                    AssemblyStore.GetAssembly(library, out assembly);
-
-                    if (assembly.HasPatchMark())
-                    {
-                        Console.WriteLine("[INFO]\tThe file `{0}` is already patched and will be skipped! " +
-                            "Restore the original library before running this program to patch it again.", libraryPath);
-                        continue;
-                    }
-
-                    // Construct a hooker wrapper around the main Module of the assembly.
-                    // The wrapper facilitates hooking into method calls.
-                    ModuleDefinition mainModule = assembly.MainModule;
-                    Hooker wrapper = new Hooker(mainModule);
-                    Console.WriteLine("[INFO]\tParsing `{0}`..", libraryPath);
-
-                    // Keep track of hooked methods
-                    bool isHooked = false;
-                    // Loop each hook entry looking for registered types and methods
-                    foreach (HOOK_ENTRY hookEntry in hookEntries)
-                    {
-                        try
-                        {
-                            wrapper.AddHookBySuffix(hookEntry.TypeName, hookEntry.MethodName);
-                            isHooked = true;
-                        }
-                        catch (MissingMethodException)
-                        {
-                            //Console.WriteLine("[DEBUG]\tThere was no function found by the name '{0}.{1}', this entry will be ignored!",
-                            //    hookEntry.TypeName, hookEntry.FunctionName);
-                        }
-                    }
-
-                    try
-                    {
-                        // Only save if the file actually changed!
-                        if (isHooked)
-                        {
-                            // Save the manipulated assembly
-                            library.Save();
-                        }
-
-                        // Do NOT overwrite the original file with the new one !
-                        // File.Copy(libraryOutPath, libraryPath, true);
-                    }
-                    catch (IOException)
-                    {
-                        // The file could be locked! Notify user.
-                        // .. or certain libraries could not be resolved..
-                        var msg = String.Format("An error occurred while trying to write to file `{0}`. " +
-                            "The file is possibly locked, make sure no other program is using it!", libraryOutPath);
-
-                        // If the outfile exists, remove it because it's most likely empty
-                        if (File.Exists(libraryOutPath))
-                        {
-                            // This function normally results in a null operation if the file does not exist,
-                            // but we checked if the file existed manually anyway!
-                            File.Delete(libraryOutPath);
-                        }
-
-                        throw;
-                    }
-                } // End foreach LIB_TYPE
-
-            }
-            catch (Exception e)
+                // Process general options
+                Prepare((GeneralOptions)invokedOperationOptions);
+            } catch(Exception e)
             {
-                Console.WriteLine("[EXCEPTION] {0}", e.Message);
-                // To log
-                // Console.Error.WriteLine("[EXCEPTION] {0}\n{1}", e.Message, e.StackTrace);
+                Log.Exception(e.Message, e);
                 goto ERROR;
             }
 
-            FINISH:
-            Console.WriteLine("FINISHED - Press a key to continue..");
-            Console.ReadKey();
+            try
+            {
+                switch (invokedOperation)
+                {
+                    case OPERATION_HOOK:
+                        var hookHelper = new HookHelper((HookSubOptions)invokedOperationOptions);
+                        hookHelper.TryHook();
+
+                        break;
+                    case OPERATION_RESTORE:
+                        var restore = new Restore((RestoreSubOptions)invokedOperationOptions);
+                        restore.TryRestore();
+
+                        break;
+                    default:
+                        // Error happened
+                        throw new ArgumentException("Invalid verb processed");
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Exception(EXCEPTION_MSG, e);
+                goto ERROR;
+            }
+
+            // All OK
             return 0;
 
             ERROR:
-            Console.WriteLine("FINISHED - Press a key to continue..");
-            Console.ReadKey();
             return 1;
-
         }
     }
 }
