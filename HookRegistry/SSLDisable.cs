@@ -30,9 +30,9 @@ namespace Hooks
 
         private void PrepareDynamicCalls()
         {
-            // Prepare dynamic call to Unity
+            // Prepare dynamic call to CSharp-firstpass library
             // Load from assembly file at currently executing path
-            var loc = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_UNITY_NAME);
+            var loc = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_CSHARP_FIRSTP_NAME);
             Assembly libAssembly = Assembly.LoadFrom(loc);
             TypeSslParams = libAssembly.GetType("bgs.SslParameters");
             TypeBattleNetC = libAssembly.GetType("bgs.BattleNetCSharp");
