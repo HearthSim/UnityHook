@@ -1,6 +1,21 @@
-//GameState::OnPowerHistory
-//BattleNet::.cctor
-//BattleNetCSharp::AuroraStateHandler_WaitForLogon
-//BattleNetCSharp::GetLaunchOption
-//Network::GetBattlePayConfigResponse
+// EXAMPLE HOOKS
+// Comments in this form are allowed!
+// Empty lines will be skipped..
+
+// Your version of Hookregistry must have a corresponding logic function for each method listed below!
+// Undefined behaviour will occur if a method get's hooked without proper handling of the data flow. 
+// (In the best case your game will 'just' crash)
+
+// Function that initialises the clients connection to the server.
+// Hook this method in combination with SSLDisable [Check details of HookRegistry]
 BattleNetCSharp::Init
+
+// The following methods are used for packet capturing inbetween client and server.
+// Hook these methods in combination with PacketDumper [Check details of HookRegistry]
+// Packets outgoing (client -> server)
+PegasusPacket::Encode
+BattleNetPacket::Encode
+// Packets incoming (server -> client)
+PegasusPacket::IsLoaded
+BattleNetPacket::IsLoaded
+

@@ -74,7 +74,8 @@ namespace Hooks
                 Assembly unityAssembly = Assembly.LoadFrom(Path.Combine(LibLocation, LIB_UNITY_NAME));
                 var unityType = unityAssembly.GetType("UnityEngine.Debug");
                 _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
-            } catch (Exception)
+            }
+            catch (Exception)
             {
                 // Do nothing
             }
@@ -90,6 +91,18 @@ namespace Hooks
                 var logmessage = String.Format("[HOOKER]\t{0}", message);
                 _LogMethod.Invoke(null, new[] { logmessage });
             }
+        }
+
+        // This function implements behaviour to force a crash in the game.
+        // This is to make sure we don't break anything.
+        public static void Panic(string message = "")
+        {
+            var msg = string.Format("Forced crash because of error: `{0}` !", message);
+            // Push the message to the game log
+            Get().Log(msg);
+
+            // Make the game crash!
+            throw new Exception("[HOOKER] Forced crash because of an error!");
         }
 
         // First function called by modified libraries.
