@@ -84,12 +84,12 @@ namespace Hooker
                     case OPERATION_HOOK:
                         var hookHelper = new HookHelper((HookSubOptions)invokedOperationOptions);
                         hookHelper.TryHook();
-
+                        Log.Info("Succesfully hooked the game libraries!");
                         break;
                     case OPERATION_RESTORE:
                         var restore = new Restore((RestoreSubOptions)invokedOperationOptions);
                         restore.TryRestore();
-
+                        Log.Info("Succesfully restored the original game libraries!");
                         break;
                     default:
                         // Error happened

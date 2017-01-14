@@ -9,6 +9,7 @@ namespace Hooker
 {
     class Restore
     {
+        public const string FILE_RESTORED = "The original file `{0}` is restored.";
         public const string ERR_RESTORE_FILE = "A problem occurred while restoring file `{0}`!";
 
         // Collection of all options
@@ -54,6 +55,7 @@ namespace Hooker
                 try
                 {
                     File.Copy(backup, reconstructed, true);
+                    Program.Log.Info(FILE_RESTORED, reconstructed);
                 }
                 catch (Exception e)
                 {

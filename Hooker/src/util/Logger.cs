@@ -76,21 +76,21 @@ namespace Hooker
         public void Debug(string message, params object[] fills)
         {
             message = string.Format(message, fills);
-            var msg = string.Format(LOGFORMAT, DateTime.Now, DEBUG, message);
+            var msg = string.Format(LOGFORMAT, DateTime.UtcNow, DEBUG, message);
             OutStream.WriteLine(msg);
         }
 
         public void Info(string message, params object[] fills)
         {
             message = string.Format(message, fills);
-            var msg = string.Format(LOGFORMAT, DateTime.Now, INFO, message);
+            var msg = string.Format(LOGFORMAT, DateTime.UtcNow, INFO, message);
             OutStream.WriteLine(msg);
         }
 
         public void Warn(string message, params object[] fills)
         {
             message = string.Format(message, fills);
-            var msg = string.Format(LOGFORMAT, DateTime.Now, WARN, message);
+            var msg = string.Format(LOGFORMAT, DateTime.UtcNow, WARN, message);
             OutStream.WriteLine(msg);
         }
 
@@ -101,7 +101,7 @@ namespace Hooker
             var stacktraceText = string.Format("--->{0}<---\n{1}", e?.Message, e?.StackTrace);
             var stacktrace = (DebugMode == true) ? stacktraceText : "";
 
-            var msg = string.Format(EXCEPT_FORMAT, DateTime.Now, EXCEPTION, message, stacktrace);
+            var msg = string.Format(EXCEPT_FORMAT, DateTime.UtcNow, EXCEPTION, message, stacktrace);
             OutStream.WriteLine(msg);
         }
     }

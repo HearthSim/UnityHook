@@ -1,10 +1,9 @@
 // EXAMPLE HOOKS
-// Comments in this form are allowed!
+// Comments in this syntax are allowed!
 // Empty lines will be skipped..
 
 // Your version of Hookregistry must have a corresponding logic function for each method listed below!
-// Undefined behaviour will occur if a method get's hooked without proper handling of the data flow. 
-// (In the best case your game will 'just' crash)
+// Hooking a method not expected by HookRegistry will have no effect on game execution.
 
 // Function that initialises the clients connection to the server.
 // Hook this method in combination with SSLDisable [Check details of HookRegistry]
