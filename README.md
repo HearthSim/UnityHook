@@ -41,9 +41,9 @@ Currently implemented hooks are following
 
 - Hearthstone
     - Disable SSL connection between client/server;
-    - Duplicate packets transferred between client/server to another TCP stream. These streams try to attack to any server
-    that is bound to the address **localhost** with ports **30123** AND **30124**. Both streams are used to transfer both types of network
-    packets.
+    - Duplicate packets transferred between client/server to another TCP stream. These streams try to attach to any server
+    that is bound to the address **localhost** with ports **30123** AND **30124**. Both streams are used, each transfers one
+    type of network packet.
 - General
     - Hooking into the Unity logger.
 
@@ -51,7 +51,7 @@ Currently implemented hooks are following
 The file which contains all methods to be hooked. See `{REPOPATH}\Hooker\example_hooks` for more information
 about it's syntax. The example_hooks file is needed for the example at the next section.
 
-**NOTE:** The hooker will always hook all methods entered in the Hooks file, when found in the assemblies. Hooking a method which is not expected by **HooksRegistry** has
+**NOTE:** The hooker will always hook all methods, if found in the assemblies, entered in the Hooks file. Hooking a method which is not expected by **HooksRegistry** has
 no side effect on the game!   
 
 ## Usage Example
@@ -59,7 +59,8 @@ no side effect on the game!
 
 Effects of the example
 - The game creates a non secure connection to the server (NOT over TLS);
-- All transferred network packets are being duplicated to another TCP stream. 
+- All transferred network packets are being duplicated to another TCP stream.
+Given that a server is bound to both ports **30123** and **30124** on **localhost** at startup of the game. This hook has no effect on the game if no server is listening.
 
 What you need
 
@@ -75,6 +76,6 @@ Steps
     - Requested methods are hooked;
     - Original assemblies are duplicated next to the original as {name}.original.dll;
     - Patched assemblies are written to the game directory as {name}.out.dll;
-    - Patched assemblies replace the original assemblies;
+    - Patched assemblies replace the original assemblies as {name}.dll;
     - **HookRegistry** assembly is copied next to the game assemblies;
 3. Run the Game - Watch the game log for lines starting with [HOOKER].
