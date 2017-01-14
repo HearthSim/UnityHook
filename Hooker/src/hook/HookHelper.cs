@@ -28,17 +28,28 @@ namespace Hooker
         {
             public string TypeName;
             public string MethodName;
+
+            public string FullMethodName
+            {
+                get { return TypeName + METHOD_SPLIT + MethodName; }
+            }
         }
 
         // The string used to split TypeName from FunctionName; see ReadHooksFile(..)
-        public const string HOOK_SPLIT = "::";
+        public const string METHOD_SPLIT = "::";
 
         // Collection of all options
         private HookSubOptions _options { get; }
 
+        // All hook class types from HookRegistry
+        private List<Type> HookTypes;
+        // Array of all methods that match hook classes from HookRegistry
+        private string[] ExpectedMethods;
+
         public HookHelper(HookSubOptions options)
         {
             _options = options;
+            HookTypes = new List<Type>();
         }
 
         List<HOOK_ENTRY> ReadHooksFile(string hooksFilePath)
@@ -60,7 +71,7 @@ namespace Hooker
                 // regarding full names of Types and Methods. (namespaces!)
                 // Hook calls are now registered as FULL_TYPE_NAME::METHOD_NAME
                 // There are no methods registered without type, so this always works!
-                var breakIdx = lineTrimmed.IndexOf(HOOK_SPLIT);
+                var breakIdx = lineTrimmed.IndexOf(METHOD_SPLIT);
                 // This is not a super robuust test, but it filters out the gross of 
                 // impossible values.
                 if (breakIdx != -1)
@@ -71,7 +82,7 @@ namespace Hooker
                         // From start to "::"
                         TypeName = lineTrimmed.Substring(0, breakIdx),
                         // After (exclusive) "::" to end
-                        MethodName = lineTrimmed.Substring(breakIdx + HOOK_SPLIT.Length),
+                        MethodName = lineTrimmed.Substring(breakIdx + METHOD_SPLIT.Length),
                     });
                 }
 
@@ -125,8 +136,40 @@ namespace Hooker
             Type hrType = hr.GetType("Hooks.HookRegistry", true);
             _options.HookRegistryType = hrType;
             // Also initialise the type
-            // Initialise the Hookregistery class. 
-            hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { });
+            // Initialise the Hookregistery class while defering initialisation of dynamic types.
+            // Doing dynamic stuff write-locks library files which we need to write to in the end!
+            hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { (object)false });
+
+            // Locate all Hook classes
+            // Get RuntimeHook attribute
+            var runtimeHookAttr = hr.GetType("Hooks.RuntimeHookAttribute", true);
+            foreach (var type in hr.GetTypes())
+            {
+                // Match each type against the attribute
+                var hooks = type.GetCustomAttributes(runtimeHookAttr, false);
+                if (hooks != null && hooks.Length > 0)
+                {
+                    // The types that match are Hook classes
+                    HookTypes.Add(type);
+                }
+            }
+        }
+
+        // Calls each GetExpectedMethods function defined in the hookregistry
+        void FetchExpectedMethods()
+        {
+            List<string> temp = new List<string>();
+            foreach (Type hook in HookTypes)
+            {
+                MethodInfo method = hook.GetMethod("GetExpectedMethods");
+                if (method != null)
+                {
+                    var methods = method.Invoke(null, new object[] { });
+                    temp.AddRange((string[])methods);
+                }
+            }
+
+            ExpectedMethods = temp.ToArray();
         }
 
         void CopyHooksLibrary()
@@ -161,6 +204,8 @@ namespace Hooker
             CopyHooksLibrary();
             // Find all needed types
             FindNecessaryTypes();
+            // Find all method fullnames that the hookregistry expects
+            FetchExpectedMethods();
 
             // Read all hook functions into memory
             var hookEntries = ReadHooksFile(_options.HooksFilePath);
@@ -204,7 +249,7 @@ namespace Hooker
                 {
                     try
                     {
-                        wrapper.AddHookBySuffix(hookEntry.TypeName, hookEntry.MethodName);
+                        wrapper.AddHookBySuffix(hookEntry.TypeName, hookEntry.MethodName, ExpectedMethods);
                         isHooked = true;
                     }
                     catch (MissingMethodException)

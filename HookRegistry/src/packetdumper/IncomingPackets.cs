@@ -15,11 +15,22 @@ namespace Hooks.PacketDumper
         // Represents PegasusPacket
         Type TypePegasusPacket;
 
-        public IncomingPackets()
+        // This variable is used to control the interception of the hooked method.
+        // When TRUE, we return null to allow normal execution of the function.
+        // When FALSE, we hook into the call.
+        // This switch allows us to call the original method from within this hook class.
+        private bool reentrant;
+
+
+        public IncomingPackets(bool initDynamicCalls)
         {
             HookRegistry.Register(OnCall);
-            // Load necessary calls
-            PrepareDynamicCalls();
+            reentrant = false;
+
+            if (initDynamicCalls)
+            {
+                PrepareDynamicCalls();
+            }
         }
 
         private void PrepareDynamicCalls()
@@ -39,12 +50,12 @@ namespace Hooks.PacketDumper
         // The Hooker will cross reference all returned methods with the requested methods.
         public static string[] GetExpectedMethods()
         {
-            return new string[] { "bgs.BattleNetPacket.IsLoaded", "PegasusPacket.IsLoaded" };
+            return new string[] { "bgs.BattleNetPacket::IsLoaded", "PegasusPacket::IsLoaded" };
         }
 
         private object ProxyIsLoaded(string typeName, object thisObj)
         {
-            switch(typeName)
+            switch (typeName)
             {
                 case "bgs.BattleNetPacket":
                     return TypeBattleNetPacket.GetMethod("IsLoaded").Invoke(thisObj, new object[] { });
@@ -84,20 +95,31 @@ namespace Hooks.PacketDumper
 
         object OnCall(string typeName, string methodName, object thisObj, object[] args)
         {
-            if (typeName != "bgs.BattleNetPacket" || typeName != "PegasusPacket" || methodName != "IsLoaded")
+
+            if ((typeName != "bgs.BattleNetPacket" && typeName != "PegasusPacket") || methodName != "IsLoaded")
             {
                 return null;
             }
+
+            if(reentrant)
+            {
+                return null;
+            }
+
+            reentrant = true;
 
             // Call the real method
             object isLoaded = ProxyIsLoaded(typeName, thisObj);
 
 
-            if((bool)isLoaded == true)
+            if ((bool)isLoaded == true)
             {
                 // If the packet is complete, we copy it to our own stream
                 DumpPacket(typeName, thisObj);
             }
+
+            // Do not 
+            reentrant = false;
 
             return isLoaded;
         }

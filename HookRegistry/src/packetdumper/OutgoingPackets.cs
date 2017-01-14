@@ -16,11 +16,17 @@ namespace Hooks.PacketDumper
         // Represents PegasusPacket
         Type TypePegasusPacket;
 
-        public OutgoingPackets()
+        private bool reentrant;
+
+        public OutgoingPackets(bool initDynamicCalls)
         {
             HookRegistry.Register(OnCall);
-            // Load necessary calls
-            PrepareDynamicCalls();
+            reentrant = false;
+
+            if (initDynamicCalls)
+            {
+                PrepareDynamicCalls();
+            }
         }
 
         private void PrepareDynamicCalls()
@@ -40,7 +46,7 @@ namespace Hooks.PacketDumper
         // The Hooker will cross reference all returned methods with the requested methods.
         public static string[] GetExpectedMethods()
         {
-            return new string[] { "bgs.BattleNetPacket.Encode", "PegasusPacket.Encode" };
+            return new string[] { "bgs.BattleNetPacket::Encode", "PegasusPacket::Encode" };
         }
 
         private object ProxyEncode(string typeName, object thisObj)
@@ -84,14 +90,24 @@ namespace Hooks.PacketDumper
 
         object OnCall(string typeName, string methodName, object thisObj, object[] args)
         {
-            if (typeName != "bgs.BattleNetPacket" || typeName != "PegasusPacket" || methodName != "Encode")
+            if ((typeName != "bgs.BattleNetPacket" && typeName != "PegasusPacket") || methodName != "Encode")
             {
                 return null;
             }
+
+            if (reentrant)
+            {
+                return null;
+            }
+
+            reentrant = true;
+
             // Proxy to the real call
             object data = ProxyEncode(typeName, thisObj);
             // Dump the packet data
             DumpPacket(typeName, (byte[])data);
+
+            reentrant = false;
             // Return the actual data
             return data;
         }

@@ -33,25 +33,29 @@ namespace Hooks
 
         static HookRegistry _instance;
 
-        public static HookRegistry Get()
+        public static HookRegistry Get(bool initDynamicCalls = true)
         {
             if (_instance == null)
             {
                 _instance = new HookRegistry();
                 // Initialise the assembly store.
-                _instance.InitAssemblies();
-                // Load assembly data for dynamic calls
-                _instance.PrepareDynamicCalls();
+                _instance.Init();
+
+                // When loading assemblies, they are writelocked. By defering this initialisation we can still write to
+                // all game assemblies while hooking.
+                if (initDynamicCalls == true)
+                {
+                    // Load assembly data for dynamic calls
+                    _instance.PrepareDynamicCalls();
+                }
                 // Setup all hook information
-                _instance.LoadRuntimeHooks();
+                _instance.LoadRuntimeHooks(initDynamicCalls);
 
             }
             return _instance;
         }
 
-        // The assembly store will assist in providing assemblies for dynamic
-        // method calls
-        private void InitAssemblies()
+        private void Init()
         {
             // All necessary libraries should be next to this assembly file.
             // GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
@@ -64,21 +68,10 @@ namespace Hooks
         // Load necessary types for dynamic method calls
         private void PrepareDynamicCalls()
         {
-            // We must design this function around failing, because our locationstring is not 100% thrustworthy
-            // nor is there any guarantee that de requested libraries are in the same folder!
-            // EG When dynamically invoking Get(..) from the Hooker project, this fails.
-            // When hooking, it's not necessary to have the game libraries be next to this assembly.
-            try
-            {
-                // Prepare dynamic call to Unity
-                Assembly unityAssembly = Assembly.LoadFrom(Path.Combine(LibLocation, LIB_UNITY_NAME));
-                var unityType = unityAssembly.GetType("UnityEngine.Debug");
-                _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
-            }
-            catch (Exception)
-            {
-                // Do nothing
-            }
+            // Prepare dynamic call to Unity
+            Assembly unityAssembly = Assembly.LoadFrom(Path.Combine(LibLocation, LIB_UNITY_NAME));
+            var unityType = unityAssembly.GetType("UnityEngine.Debug");
+            _LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public, Type.DefaultBinder, new Type[] { typeof(string) }, null);
         }
 
         // Wrapper around the log method from unity.
@@ -125,7 +118,7 @@ namespace Hooks
         }
 
         // Install hook listeners by classes that have the [RuntimeHook] attribute
-        void LoadRuntimeHooks()
+        void LoadRuntimeHooks(bool initDynamicCalls)
         {
             // Loop all types defined in this assembly file; read - the HookRegistry project
             // The game might be provided with a custom built core library.. 
@@ -138,7 +131,7 @@ namespace Hooks
                 var hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
                 if (hooks != null && hooks.Length > 0)
                 {
-                    activeHooks.Add(type.GetConstructor(Type.EmptyTypes).Invoke(new object[0]));
+                    activeHooks.Add(type.GetConstructor(new Type[] { typeof(bool) }).Invoke(new object[] { (object)initDynamicCalls }));
                 }
             }
         }
