@@ -10,6 +10,8 @@ namespace Hooker
 {
     class Hooker
     {
+        public const string UNEXPECTED_METHOD = "The method `{0}` is not expected by your version of HookRegistry." +
+           "Continuing will have no effect. Please update your hooksfile or retrieve another HookRegistry dll file that hooks into the given method!";
         public const string HOOKED_METHOD = "\tMethod `{0}` hooked.";
         public const string HOOK_PROBLEM = "A problem occurred while hooking `{0}`: {1}\n" + "Hooking will continue!";
 
@@ -17,11 +19,9 @@ namespace Hooker
         public ModuleDefinition Module { get; private set; }
         // Method that gets called when entering a hooked method
         private MethodReference onCallMethodRef;
-        // MethodHandle is a utility type to get method information at runtime
-        private TypeReference rmhTypeRef;
 
         private Hooker()
-        {            
+        {
         }
 
         public static Hooker New(ModuleDefinition module, HookSubOptions options)
@@ -34,6 +34,8 @@ namespace Hooker
 
             // Fetch types and references
             Type _hookRegistryType = options.HookRegistryType;
+            // RuntimeMethodHandle gives us information about the hooked function.
+            // By doing this import we FAIL EARLY if the Type could not be found. (headache prevention)
             var rmhTypeRef = module.Import(typeof(System.RuntimeMethodHandle));
             // Look for the HookRegistry.onCall(..) method
             var onCallMethodRef = module.Import(_hookRegistryType.GetMethods().First(mi => mi.Name.Equals("OnCall")));
@@ -48,13 +50,12 @@ namespace Hooker
             {
                 Module = module,
                 onCallMethodRef = onCallMethodRef,
-                rmhTypeRef = rmhTypeRef
             };
-               
+
             return newObj;
         }
 
-        public void AddHookBySuffix(string typeName, string methodName)
+        public void AddHookBySuffix(string typeName, string methodName, string[] expectedMethods)
         {
             // Get all types from the Module that match the given typeName.
             // A type is selected if the predicate, inside the lambda definition, returns true.
@@ -85,6 +86,12 @@ namespace Hooker
                 {
                     try
                     {
+                        var methodFullname = method.DeclaringType.FullName + HookHelper.METHOD_SPLIT + method.Name;
+                        // WARN because no hookregistry expects this method to be hooked
+                        if (expectedMethods.FirstOrDefault(m => m.Equals(methodFullname)) == null)
+                        {
+                            Program.Log.Warn(UNEXPECTED_METHOD, methodFullname);
+                        }
                         // Hook our code into the body of this method
                         AddHook(method);
                         Program.Log.Info(HOOKED_METHOD, method.FullName);
@@ -138,7 +145,10 @@ namespace Hooker
             //      1. Construct an array for intercepting the passed arguments to this method;
             //      2. Fill array with upcasted (to Object class) values (primitives are boxed)
             //      3. Call HookRegistry.OnCall( handle to original method, thisobject of method, arguments passed[])
-            //      4. Return the value (if any) returned by our hooked function as the value of the targetted method
+            //      4. All hook classes are called
+            //      5. If any of them returned anything (!= null), that result will be passed back as the return value
+            //          of the hooked method.
+            //          ! If null is returned from each hook class, the original function is executed
 
             // object[] interceptedArgs;
             // object hookResult;
