@@ -10,8 +10,13 @@ namespace Hooks.PacketDumper
     [RuntimeHook]
     class IncomingPackets
     {
+        object[] EMPTY_ARGS = { };
+
         // Represents bgs.BattleNetPacket
         Type TypeBattleNetPacket;
+        // Represents bnet.protocol.Header -> the header of battle.net packet
+        Type TypeBattleNetHeader;
+
         // Represents PegasusPacket
         Type TypePegasusPacket;
 
@@ -40,6 +45,7 @@ namespace Hooks.PacketDumper
             var locFirstPass = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_CSHARP_FIRSTP_NAME);
             Assembly libFirstPass = Assembly.LoadFrom(locFirstPass);
             TypeBattleNetPacket = libFirstPass.GetType("bgs.BattleNetPacket");
+            TypeBattleNetHeader = libFirstPass.GetType("bnet.protocol.Header");
 
             var loc = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_CSHARP_NAME);
             Assembly lib = Assembly.LoadFrom(loc);
@@ -58,11 +64,9 @@ namespace Hooks.PacketDumper
             switch (typeName)
             {
                 case "bgs.BattleNetPacket":
-                    return TypeBattleNetPacket.GetMethod("IsLoaded").Invoke(thisObj, new object[] { });
-                    break;
+                    return TypeBattleNetPacket.GetMethod("IsLoaded").Invoke(thisObj, EMPTY_ARGS);
                 case "PegasusPacket":
-                    return TypePegasusPacket.GetMethod("IsLoaded").Invoke(thisObj, new object[] { });
-                    break;
+                    return TypePegasusPacket.GetMethod("IsLoaded").Invoke(thisObj, EMPTY_ARGS);
                 default:
                     // Returning false here would just introduce undefined behaviour
                     HookRegistry.Panic("Unknown typename!");
@@ -72,18 +76,65 @@ namespace Hooks.PacketDumper
             return false;
         }
 
+        // Dumps the current packet onto the tee stream.
+        // The packet has to be reconstructed according to the rules found in the respective
+        // encoding(..) method.
         private void DumpPacket(string typeName, object thisObj)
         {
-            // We only have to trigger the encode method, because that one should be hooked as well!
-            // We can't call encode and dump the returned value, because that leads to multiple dumps of
-            // the same data.
+            TeeStream tee = TeeStream.Get();
+            // Container for our dumped packet.
+            MemoryStream dataStream = new MemoryStream();
+
             switch (typeName)
             {
                 case "bgs.BattleNetPacket":
-                    TypeBattleNetPacket.GetMethod("Encode").Invoke(thisObj, new object[] { });
+                    {
+                        // Get data.
+                        object header = TypeBattleNetPacket.GetMethod("GetHeader").Invoke(thisObj, EMPTY_ARGS); // bnet.protocol.Header
+                        object data = TypeBattleNetPacket.GetMethod("GetBody").Invoke(thisObj, EMPTY_ARGS); // byte[]
+
+                        // Get sizes of packet parts.
+                        uint headerSize = (uint)TypeBattleNetHeader.GetMethod("GetSerializedSize").Invoke(header, EMPTY_ARGS); // uint
+                        int bodySize = ((byte[])data).Length;
+
+                        // Write sizes to buffer.
+                        int streamHeaderSize = ((int)headerSize >> 8);
+                        dataStream.WriteByte((byte)(streamHeaderSize & 0xff));
+                        dataStream.WriteByte((byte)(bodySize & 0xff));
+
+                        // Write header to buffer.
+                        TypeBattleNetHeader.GetMethod("Serialize", BindingFlags.Instance | BindingFlags.Public)
+                            .Invoke(header, new object[] { dataStream });
+
+                        // Copy body to buffer.
+                        dataStream.Write((byte[])data, 0, bodySize);
+
+                        // Write data to tee stream.
+                        tee.WriteBattlePacket(dataStream.ToArray(), true);
+                    }
                     break;
                 case "PegasusPacket":
-                    TypePegasusPacket.GetMethod("Encode").Invoke(thisObj, new object[] { });
+                    {
+                        // Get data.
+                        object data = TypePegasusPacket.GetMethod("GetBody").Invoke(thisObj, EMPTY_ARGS); // byte[]
+                        object type = TypePegasusPacket.GetField("Type", BindingFlags.GetField).GetValue(thisObj); // int
+
+                        // Get size of body.
+                        int bodySize = ((byte[])data).Length;
+
+                        // Write sizes to buffer.
+                        byte[] typeBytes = BitConverter.GetBytes((int)type); // 4 bytes
+                        byte[] sizeBytes = BitConverter.GetBytes(bodySize); // 4 bytes
+
+                        dataStream.Write(typeBytes, 0, 4);
+                        dataStream.Write(sizeBytes, 0, 4);
+
+                        // Write body to the stream.
+                        dataStream.Write((byte[])data, 0, bodySize);
+
+                        // Write to tee stream.
+                        tee.WritePegasusPacket(dataStream.ToArray(), true);
+                    }
                     break;
                 default:
                     // Returning false here would just introduce undefined behaviour
@@ -101,16 +152,17 @@ namespace Hooks.PacketDumper
                 return null;
             }
 
-            if(reentrant)
+            if (reentrant == true)
             {
                 return null;
             }
 
+            // Setting this variable makes sure we don't end up in an infinite loop.
+            // Because the hooker calls the hooked method again to fetch the returned data.
             reentrant = true;
 
             // Call the real method
             object isLoaded = ProxyIsLoaded(typeName, thisObj);
-
 
             if ((bool)isLoaded == true)
             {
@@ -118,7 +170,7 @@ namespace Hooks.PacketDumper
                 DumpPacket(typeName, thisObj);
             }
 
-            // Do not 
+            // Reset state.
             reentrant = false;
 
             return isLoaded;

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
@@ -10,45 +12,58 @@ namespace Hooks.PacketDumper
 {
     class TeeStream
     {
-
-        public const int BNET_SEND_PORT = 30123;
-        public const int PEGASUS_SEND_PORT = 30124;
+        public const int BNET_RECV_PORT = 6666;
+        public const int BNET_SEND_PORT = 6667;
+        public const int PEGASUS_RECV_PORT = 6668;
+        public const int PEGASUS_SEND_PORT = 6669;
 
         // Stream where all battle.net packets are being written to
-        private TcpClient StreamBattleNet;
+        private TcpClient TcpBattleNetIn;
+        private TcpClient TcpBattleNetOut;
         // Stream where all Pegasus packets are being written to
-        private TcpClient StreamPegasus;
+        private TcpClient TcpPegasusIn;
+        private TcpClient TcpPegasusOut;
         // Timer used to check if the tcp connection is still alive
         private Timer StreamAliveChecker;
 
+        private Stream BIN;
+        private Stream BOUT;
+        private Stream PIN;
+        private Stream POUT;
+
         private TeeStream()
         {
-            StreamBattleNet = new TcpClient(); // "localhost", 30123
-            StreamPegasus = new TcpClient(); // "localhost", 30124
+            TcpBattleNetIn = new TcpClient(); // "localhost", 30123
+            TcpBattleNetOut = new TcpClient();
+            TcpPegasusIn = new TcpClient(); // "localhost", 30124
+            TcpPegasusOut = new TcpClient();
+
             StreamAliveChecker = new Timer();
+
+            BIN = null;
+            BOUT = null;
+            PIN = null;
+            POUT = null;
         }
 
         private void Initialise()
         {
-            // Wait 3 seconds max before timing out the connection attempt
-            var waitSeconds = 3;
-
             // Bind to localhost so the packets use the loopback interface to reach the listener.
             // This prevents sending packets to other devices on the connected network.
-            // Start connection task
-            var bConnectResult = StreamBattleNet.BeginConnect("localhost", BNET_SEND_PORT, null, null);
-            var pConnectResult = StreamPegasus.BeginConnect("localhost", PEGASUS_SEND_PORT, null, null);
-            var bWaitHandle = bConnectResult.AsyncWaitHandle;
-            var pWaitHandle = pConnectResult.AsyncWaitHandle;
             try
             {
-                // Block thread while trying to connect
-                var bnetSucces = bConnectResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(waitSeconds), false);
-                var pegSucces = pConnectResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(waitSeconds), false);
+                TcpBattleNetOut.Connect(IPAddress.Loopback, BNET_SEND_PORT);
+                TcpBattleNetIn.Connect(IPAddress.Loopback, BNET_RECV_PORT);
 
-                // Forces success or socket exception 
-                StreamBattleNet.EndConnect(bConnectResult);
-                StreamPegasus.EndConnect(pConnectResult);
+                TcpPegasusOut.Connect(IPAddress.Loopback, PEGASUS_SEND_PORT);
+                TcpPegasusIn.Connect(IPAddress.Loopback, PEGASUS_RECV_PORT);
+
+                // Get stream objects of the TCP connections.
+                BIN = TcpBattleNetIn.GetStream();
+                BOUT = TcpBattleNetOut.GetStream();
+                PIN = TcpPegasusIn.GetStream();
+                POUT = TcpPegasusOut.GetStream();
+
 
                 HookRegistry.Get().Log("PacketDumper connections installed!");
                 // Monitor the streams
@@ -56,13 +71,12 @@ namespace Hooks.PacketDumper
             }
             catch (SocketException e)
             {
-                var msg = string.Format("Couldn't open a stream to dump the network packets. Message: `{0}`", e.Message);
+                var msg = string.Format("Couldn't open a stream to dump the network packets. Message: `{0}`", e.ToString());
                 HookRegistry.Get().Log(msg);
             }
             finally
             {
-                bWaitHandle.Close();
-                pWaitHandle.Close();
+
             }
         }
 
@@ -82,7 +96,8 @@ namespace Hooks.PacketDumper
         // Test state of our streams, shut them down if something went wrong to prevent exceptions when writing
         private void TestConnectionActivity(Object source, ElapsedEventArgs e)
         {
-            if (StreamBattleNet.GetState() != TcpState.Established || StreamPegasus.GetState() != TcpState.Established)
+            if (TcpBattleNetIn.Connected != true || TcpPegasusIn.Connected != true ||
+                TcpBattleNetOut.Connected != true || TcpPegasusOut.Connected != true)
             {
                 // Disable timer
                 StreamAliveChecker.Enabled = false;
@@ -90,26 +105,81 @@ namespace Hooks.PacketDumper
                 {
                     HookRegistry.Get().Log("Shutting down TeeStream connections because of invalid state!");
                     // close off streams
-                    StreamBattleNet.Close();
-                    StreamPegasus.Close();
-                    StreamBattleNet = null;
-                    StreamPegasus = null;
+                    TcpBattleNetIn.Close();
+                    TcpBattleNetOut.Close();
+                    TcpPegasusIn.Close();
+                    TcpPegasusOut.Close();
                 }
                 catch (Exception)
                 {
                     // Do nothing
                 }
+                finally
+                {
+                    BIN = null;
+                    BOUT = null;
+                    PIN = null;
+                    POUT = null;
+                }
             }
         }
 
-        public void WriteBattlePacket(byte[] data)
+        public void WriteBattlePacket(byte[] data, bool incoming)
         {
-            StreamBattleNet?.GetStream().Write(data, 0, data.Length);
+            //HookRegistry.Get().Log("Entry write battle packet");
+
+            try
+            {
+                if (incoming == true)
+                {
+                    if (BIN?.CanWrite == true)
+                    {
+                        BIN?.Write(data, 0, data.Length);
+                    }
+                }
+                else
+                {
+                    if (BOUT?.CanWrite == true)
+                    {
+                        BOUT?.Write(data, 0, data.Length);
+                    }
+                }
+            }
+            catch (SocketException)
+            {
+
+            }
+
+            //HookRegistry.Get().Log("END write battle packet");
         }
 
-        public void WritePegasusPacket(byte[] data)
+        public void WritePegasusPacket(byte[] data, bool incoming)
         {
-            StreamPegasus?.GetStream().Write(data, 0, data.Length);
+            //HookRegistry.Get().Log("Entry write pegasus packet");
+
+            try
+            {
+                if (incoming == true)
+                {
+                    if (PIN?.CanWrite == true)
+                    {
+                        PIN?.Write(data, 0, data.Length);
+                    }
+                }
+                else
+                {
+                    if (PIN?.CanWrite == true)
+                    {
+                        PIN?.Write(data, 0, data.Length);
+                    }
+                }
+            }
+            catch (SocketException)
+            {
+
+            }
+
+            //HookRegistry.Get().Log("END write pegasus packet");
         }
 
         private static TeeStream _thisObj;

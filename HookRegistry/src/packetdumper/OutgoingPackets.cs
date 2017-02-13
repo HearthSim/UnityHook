@@ -10,6 +10,7 @@ namespace Hooks.PacketDumper
     [RuntimeHook]
     class OutgoingPackets
     {
+        object[] EMPTY_ARGS = { };
 
         // Represents bgs.BattleNetPacket
         Type TypeBattleNetPacket;
@@ -54,11 +55,11 @@ namespace Hooks.PacketDumper
             switch (typeName)
             {
                 case "bgs.BattleNetPacket":
-                    return TypeBattleNetPacket.GetMethod("Encode").Invoke(thisObj, new object[] { });
-                    break;
+                    return TypeBattleNetPacket.GetMethod("Encode").Invoke(thisObj, EMPTY_ARGS);
+
                 case "PegasusPacket":
-                    return TypePegasusPacket.GetMethod("Encode").Invoke(thisObj, new object[] { });
-                    break;
+                    return TypePegasusPacket.GetMethod("Encode").Invoke(thisObj, EMPTY_ARGS);
+
                 default:
                     // Returning null here would just introduce undefined behaviour
                     HookRegistry.Panic("Unknown typename!");
@@ -68,21 +69,20 @@ namespace Hooks.PacketDumper
             return null;
         }
 
+        // Dump data just as we receive it.
         private void DumpPacket(string typeName, byte[] data)
         {
             // Maybe do some kind of double write protection here?
-
             var tee = TeeStream.Get();
             switch (typeName)
             {
                 case "bgs.BattleNetPacket":
-                    tee.WriteBattlePacket(data);
+                    tee.WriteBattlePacket(data, false);
                     break;
                 case "PegasusPacket":
-                    tee.WritePegasusPacket(data);
+                    tee.WritePegasusPacket(data, false);
                     break;
                 default:
-                    // Returning null here would just introduce undefined behaviour
                     HookRegistry.Panic("Unknown typename!");
                     break;
             }
@@ -102,13 +102,14 @@ namespace Hooks.PacketDumper
 
             reentrant = true;
 
-            // Proxy to the real call
+            // Proxy to the real call and receive the encoded blob.
+            // This blob contains properly encoded header + body.
             object data = ProxyEncode(typeName, thisObj);
-            // Dump the packet data
+            // Dump the packet data.
             DumpPacket(typeName, (byte[])data);
 
             reentrant = false;
-            // Return the actual data
+            // Return the data blob.
             return data;
         }
     }
