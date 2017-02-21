@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Timers;
 
@@ -12,6 +13,8 @@ namespace Hooks.PacketDumper
 {
     class TeeStream
     {
+        object[] EMPTY_ARGS = { };
+
         public const int BNET_RECV_PORT = 6666;
         public const int BNET_SEND_PORT = 6667;
         public const int PEGASUS_RECV_PORT = 6668;
@@ -30,6 +33,14 @@ namespace Hooks.PacketDumper
         private Stream BOUT;
         private Stream PIN;
         private Stream POUT;
+
+        // Represents bgs.BattleNetPacket
+        Type TypeBattleNetPacket;
+        // Represents bnet.protocol.Header -> the header of battle.net packet
+        Type TypeBattleNetHeader;
+
+        // Represents PegasusPacket
+        Type TypePegasusPacket;
 
         private TeeStream()
         {
@@ -168,9 +179,9 @@ namespace Hooks.PacketDumper
                 }
                 else
                 {
-                    if (PIN?.CanWrite == true)
+                    if (POUT?.CanWrite == true)
                     {
-                        PIN?.Write(data, 0, data.Length);
+                        POUT?.Write(data, 0, data.Length);
                     }
                 }
             }

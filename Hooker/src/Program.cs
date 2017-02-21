@@ -55,11 +55,17 @@ namespace Hooker
                 Console.WriteLine(opts.GetUsage("help"));
                 goto ERROR;
             }
-            if (!CommandLine.Parser.Default.ParseArguments(args, opts,
+            if (!CommandLine.Parser.Default.ParseArgumentsStrict(args, opts,
                 (verb, subOptions) =>
                 {
                     invokedOperation = verb;
                     invokedOperationOptions = subOptions;
+                },
+                () =>
+                {
+                    Log.Exception("Failed to parse arguments!");
+                    // Failed to parse, exit the program
+                    Environment.Exit(-2);
                 }))
             {
                 // The parser will have written usage information.

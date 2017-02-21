@@ -12,8 +12,9 @@ BattleNetCSharp::Init
 // The following methods are used for packet capturing inbetween client and server.
 // Hook these methods in combination with PacketDumper [Check details of HookRegistry]
 // Packets outgoing (client -> server)
-PegasusPacket::Encode
-BattleNetPacket::Encode
+SslClientConnection::SendPacket
+// The `1 indicates 1 generic parameter.
+ClientConnection`1::SendPacket
 // Packets incoming (server -> client)
 PegasusPacket::IsLoaded
 BattleNetPacket::IsLoaded
