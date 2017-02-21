@@ -41,9 +41,8 @@ Currently implemented hooks are following
 
 - Hearthstone
     - Disable SSL connection between client/server;
-    - Duplicate packets transferred between client/server to another TCP stream. These streams try to attach to any server
-    that is bound to the address **localhost** with ports **30123** AND **30124**. Both streams are used, each transfers one
-    type of network packet.
+    - Duplicate packets transferred between client/server to other TCP streams. These streams try to attach to the
+    [HearthStone packet dumper tool](https://github.com/HearthSim/Hearthstone-Packet-Dumps/tree/master/tools). 
 - General
     - Hooking into the Unity logger.
 
@@ -51,27 +50,29 @@ Currently implemented hooks are following
 The file which contains all methods to be hooked. See `{REPOPATH}\Hooker\example_hooks` for more information
 about it's syntax. The example_hooks file is needed for the example at the next section.
 
-**NOTE:** The hooker will always hook all methods, if found in the assemblies, entered in the Hooks file. Hooking a method which is not expected by **HooksRegistry** has
-no side effect on the game!   
+**NOTE:** The hooker will always hook all methods entered in the Hooks file, if found. 
+Hooking a method which is not expected by **HooksRegistry** has NO side effect on the game!   
 
 ## Usage Example
 > The example expects the example_hooks file to be used as of the latest commit, including the **HookRegistry** compiled binary.
 
 Effects of the example
 - The game creates a non secure connection to the server (NOT over TLS);
-- All transferred network packets are being duplicated to another TCP stream.
-Given that a server is bound to both ports **30123** and **30124** on **localhost** at startup of the game. This hook has no effect on the game if no server is listening.
+- All transferred network packets are being duplicated to other TCP streams.
 
 What you need
 
-- The (compiled) binaries from **Hooker**. Refered to as {HOOKERPATH};
-- The (compiled) binary from **HookRegistry**. Referred to as {REGISTRY};
-- The location of the game folder. Referred to as {GAMEDIR};
-- A hooks file, as mentioned above. Referred to as {HOOKS}.
+- The (compiled) binaries **PATH** from **Hooker**. Refered to as {HOOKERPATH};
+- The (compiled) binary **FILE** from **HookRegistry**. Referred to as {REGISTRY};
+- The **PATH** to the game folder. Referred to as {GAMEDIR};
+- A hooks **FILE**, as mentioned above. Referred to as {HOOKS}.
     
 Steps
 
-1. Call Hooker.exe, `{HOOKERPATH}\Hooker.exe -d "{GAMEDIR"} -h "{HOOKS}" -l "{REGISTRY}"`;
+1. Call Hooker.exe;
+```
+{HOOKERPATH}\Hooker.exe hook -d "{GAMEDIR}" -h "{HOOKS}" -l "{REGISTRY}"
+```
 2. Verify that that Hooker did not encounter a problem;
     - Requested methods are hooked;
     - Original assemblies are duplicated next to the original as {name}.original.dll;
@@ -79,3 +80,5 @@ Steps
     - Patched assemblies replace the original assemblies as {name}.dll;
     - **HookRegistry** assembly is copied next to the game assemblies;
 3. Run the Game - Watch the game log for lines starting with [HOOKER].
+
+> To restore, run the command ```{HOOKERPATH}\Hooker.exe restore -d "{GAMEDIR}"```
