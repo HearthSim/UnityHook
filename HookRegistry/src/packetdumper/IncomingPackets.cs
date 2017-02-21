@@ -98,9 +98,9 @@ namespace Hooks.PacketDumper
                         int bodySize = ((byte[])data).Length;
 
                         // Write sizes to buffer.
-                        int streamHeaderSize = ((int)headerSize >> 8);
-                        dataStream.WriteByte((byte)(streamHeaderSize & 0xff));
-                        dataStream.WriteByte((byte)(bodySize & 0xff));
+                        int shiftedHeaderSize = ((int)headerSize >> 8);
+                        dataStream.WriteByte((byte)(shiftedHeaderSize & 0xff));
+                        dataStream.WriteByte((byte)(headerSize & 0xff));
 
                         // Write header to buffer.
                         TypeBattleNetHeader.GetMethod("Serialize", BindingFlags.Instance | BindingFlags.Public)
@@ -109,8 +109,9 @@ namespace Hooks.PacketDumper
                         // Copy body to buffer.
                         dataStream.Write((byte[])data, 0, bodySize);
 
+                        var packetData = dataStream.ToArray();
                         // Write data to tee stream.
-                        tee.WriteBattlePacket(dataStream.ToArray(), true);
+                        tee.WriteBattlePacket(packetData, true);
                     }
                     break;
                 case "PegasusPacket":
@@ -132,8 +133,9 @@ namespace Hooks.PacketDumper
                         // Write body to the stream.
                         dataStream.Write((byte[])data, 0, bodySize);
 
+                        var packetData = dataStream.ToArray();
                         // Write to tee stream.
-                        tee.WritePegasusPacket(dataStream.ToArray(), true);
+                        tee.WritePegasusPacket(packetData, true);
                     }
                     break;
                 default:

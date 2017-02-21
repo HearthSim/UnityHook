@@ -28,6 +28,9 @@ namespace Hooks
         // All callback functions registered to with this object
         List<Callback> callbacks = new List<Callback>();
 
+        // All declaring (generic) types, for resolving methods from these generic types.
+        List<RuntimeTypeHandle> declaringTypes = new List<RuntimeTypeHandle>();
+
         // Objects initialised from all discovered hook classes
         List<object> activeHooks = new List<object>();
 
@@ -111,6 +114,11 @@ namespace Hooks
             HookRegistry.Get().callbacks.Add(cb);
         }
 
+        public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
+        {
+            HookRegistry.Get().declaringTypes.Add(typeHandle);
+        }
+
         // Remove a hook listener
         public static void Unregister(Callback cb)
         {
@@ -139,13 +147,53 @@ namespace Hooks
         // Call each hook object and return it's response.
         object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
         {
-            var method = MethodBase.GetMethodFromHandle(rmh);
+
+            MethodBase method = null;
+            try
+            {
+                // Try to directly resolve the method definition.
+                method = MethodBase.GetMethodFromHandle(rmh);
+            }
+            catch (ArgumentException)
+            {
+                // Direct resolution of method definition doesn't work,
+                // probably because of generic parameters.
+                // We must find the declaring type!
+                foreach (var declHandle in declaringTypes)
+                {
+                    try
+                    {
+                        method = MethodBase.GetMethodFromHandle(rmh, declHandle);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Do nothing, continue loop..
+                    }
+                }
+            }
+
+            // Panic if the method variable is still not set.
+            if (method == null)
+            {
+                Panic("Could not resolve the method handle!");
+            }
+
+            // Fetch usefull information from the method definition.
             var typeName = method.DeclaringType.FullName;
             var methodName = method.Name;
 
+            // Construct string representation of called function.
+            //var par = new string[args.Length];
+            //for (int i = 0; i < args.Length; ++i)
+            //{
+            //    par[i] = args[i].ToString();
+            //}
+            //var paramString = string.Join(", ", par);
+            var paramString = "..";
+            var message = String.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
+            
             // Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
             // This method prints into the game log
-            var message = String.Format("Called by `{0}.{1}(...)`", typeName, methodName);
             Log(message);
 
             // Execute each hook, because we don't know which one to actually target
