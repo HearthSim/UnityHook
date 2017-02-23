@@ -63,7 +63,7 @@ namespace Hooker
                 },
                 () =>
                 {
-                    Log.Exception("Failed to parse arguments!");
+                    // Console.WriteLine("Failed to parse arguments!");
                     // Failed to parse, exit the program
                     Environment.Exit(-2);
                 }))

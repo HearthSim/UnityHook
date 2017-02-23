@@ -118,7 +118,9 @@ namespace Hooks.PacketDumper
                     {
                         // Get data.
                         object data = TypePegasusPacket.GetMethod("GetBody").Invoke(thisObj, EMPTY_ARGS); // byte[]
-                        object type = TypePegasusPacket.GetField("Type", BindingFlags.GetField).GetValue(thisObj); // int
+
+                        var typeField = TypePegasusPacket.GetField("Type");
+                        object type = typeField.GetValue(thisObj); // int
 
                         // Get size of body.
                         int bodySize = ((byte[])data).Length;
