@@ -15,7 +15,8 @@ namespace Hooks
             INVALID = 0,
             LIB_CSHARP,
             LIB_CSHARP_FIRSTPASS,
-            UNITY_ENGINE
+            UNITY_ENGINE,
+            LIB_PLAYMAKER,
         }
 
         // File names of all assemblies, with dll extension, matching LIB_TYPE index
@@ -23,7 +24,8 @@ namespace Hooks
                 "",
                 "Assembly-CSharp.dll",
                 "Assembly-CSharp-firstpass.dll",
-                "UnityEngine.dll"
+                "UnityEngine.dll",
+                "PlayMaker.dll",
             };
 
         // String to append after assembly filename and before the extension. This is used for HOOKED assemblies.
@@ -31,9 +33,9 @@ namespace Hooks
         // String to append after assembly filename and before the extension. This is used for ORIGINAL assemblies.
         public const string AssemblyBackupAffix = ".original";
         // A mark indicating that the targetted assembly has been patched already
-        public const string TokenIsPatched = "__AS_assembly_patched";
+        public const string TokenIsPatched = "HK_AssemblyPatched";
         // The namespace to introduce new types into
-        public const string TokenNamespace = "Hooks";
+        public const string TokenNamespace = "Hooker";
 
         // Indicates if the libraries are loaded (on first retrieval) or not
         private bool _libsLoaded = false;
@@ -79,7 +81,7 @@ namespace Hooks
             resolver.AddSearchDirectory(_dataPath);
             // The resolver gets passed in a set of parameters
             var loadParams = new ReaderParameters();
-            loadParams.AssemblyResolver = resolver;
+            loadParams.AssemblyResolver = resolver;            
 
             // Retrieve an array of all values in our enum. The underlying type is int.
             // Because we know the underlying type, it's without danger to convert between
@@ -199,7 +201,7 @@ namespace Hooks
             var loadParams = new ReaderParameters();
             loadParams.AssemblyResolver = resolver;
 
-            assembly = AssemblyDefinition.ReadAssembly(filePath);
+            assembly = AssemblyDefinition.ReadAssembly(filePath, loadParams);
         }
 
         // Add the TokenIsPatched name as class Type to the module
@@ -208,6 +210,10 @@ namespace Hooks
             // Generate new (class) type
             TypeDefinition tokenType = new TypeDefinition(AssemblyStore.TokenNamespace,
                 AssemblyStore.TokenIsPatched, TypeAttributes.Class);
+            // Make the type public
+            // tokenType.IsPublic = true;
+            // IMPORTANT - Always set the base type to object!
+            tokenType.BaseType = assembly.MainModule.TypeSystem.Object;
             // Insert the type
             assembly.MainModule.Types.Add(tokenType);
             // When the assembly gets saved, this class will be present in decompilation!
@@ -216,7 +222,11 @@ namespace Hooks
         // Returns true if the patchmark is detected
         public static bool HasPatchMark(this AssemblyDefinition assembly)
         {
-            string fullTokenName = String.Format("{0}.{1}", AssemblyStore.TokenNamespace, AssemblyStore.TokenIsPatched);
+            string fullTokenName = AssemblyStore.TokenIsPatched;
+            if (AssemblyStore.TokenNamespace.Length != 0)
+            {
+                fullTokenName = String.Format("{0}.{1}", AssemblyStore.TokenNamespace, AssemblyStore.TokenIsPatched);
+            }
             // Look for the token in the given assembly (the Linq system is useful here)
             return assembly.MainModule.Types.FirstOrDefault(t => t.FullName.Equals(fullTokenName)) != null;
         }
@@ -283,6 +293,7 @@ namespace Hooks
 
             // Add our datapath to the resolve process
             (assDefinition.MainModule.AssemblyResolver as BaseAssemblyResolver).AddSearchDirectory(AssemblyStore.DataPath);
+
             // Store the assembly
             assDefinition.Write(assOutPath);
         }

@@ -7,7 +7,7 @@
 
 // Function that initialises the clients connection to the server.
 // Hook this method in combination with SSLDisable [Check details of HookRegistry]
-BattleNetCSharp::Init
+// BattleNetCSharp::Init
 
 // The following methods are used for packet capturing inbetween client and server.
 // Hook these methods in combination with PacketDumper [Check details of HookRegistry]
@@ -18,4 +18,7 @@ ClientConnection`1::SendPacket
 // Packets incoming (server -> client)
 PegasusPacket::IsLoaded
 BattleNetPacket::IsLoaded
+
+// Hooking the FSM system to prevent runtime exceptions - Issue resolved
+// ReflectionUtils::GetGlobalType
 

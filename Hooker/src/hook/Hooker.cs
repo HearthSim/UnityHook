@@ -33,18 +33,20 @@ namespace Hooker
              */
 
             // Fetch types and references
-            Type _hookRegistryType = options.HookRegistryType;
+            TypeDefinition _hookRegistryType = options.HookRegistryType;
             // RuntimeMethodHandle gives us information about the hooked function.
             // By doing this import we FAIL EARLY if the Type could not be found. (headache prevention)
-            var rmhTypeRef = module.Import(typeof(System.RuntimeMethodHandle));
+            // var rmhTypeRef = module.Import(typeof(RuntimeMethodHandle));
             // Look for the HookRegistry.onCall(..) method
-            var onCallMethodRef = module.Import(_hookRegistryType.GetMethods().First(mi => mi.Name.Equals("OnCall")));
+            var onCallMethod = _hookRegistryType.Methods.First(mi => mi.Name.Equals("OnCall"));
+            var onCallMethodRef = module.Import(onCallMethod);
             // The (reference) name for in the manifest of the hooked library. The runtime loads all referenced libraries
             // into application domain. Once in application domain, methods and types can resolve.
-            var hrAssemblyName = AssemblyNameReference.Parse(_hookRegistryType.Assembly.FullName);
+            // var hrAssemblyName = AssemblyNameReference.Parse(options.HooksRegistryAssembly.FullName);
             // By adding a new reference (pointing to our HookRegistry assembly), we are certain
             // that Module can resolve the calls to our hooks.
-            module.AssemblyReferences.Add(hrAssemblyName);
+            // MARK; CECIL DOES THIS FOR US
+            // module.AssemblyReferences.Add(hrAssemblyName);
 
             var newObj = new Hooker
             {
@@ -154,6 +156,7 @@ namespace Hooker
             // object hookResult;
             var interceptedArgs = new VariableDefinition("interceptedArgs", method.Module.TypeSystem.Object.MakeArrayType());
             var hookResult = new VariableDefinition("hookResult", method.Module.TypeSystem.Object);
+
             method.Body.Variables.Add(interceptedArgs);
             method.Body.Variables.Add(hookResult);
             var numArgs = method.Parameters.Count;
