@@ -118,26 +118,30 @@ namespace Hooker
                 throw new FileNotFoundException("Exe option `libfile` is invalid!");
             }
 
-            // Save the definition of the to injecting assembly
+            // Save the definition of the to injecting assembly.
             var hooksAssembly = AssemblyDefinition.ReadAssembly(_options.HooksRegistryFilePath);
             _options.HooksRegistryAssembly = hooksAssembly;
-            // Check if the Hooks.HookRegistry type is present
-            if (hooksAssembly.MainModule.Types.FirstOrDefault(t => t.FullName.Equals("Hooks.HookRegistry")) == null)
+            // Check if the Hooks.HookRegistry type is present.
+            var assModule = hooksAssembly.MainModule;
+            var hRegType = assModule.Types.FirstOrDefault(t => t.FullName.Equals("Hooks.HookRegistry"));
+            // Store the HooksRegistry type reference.
+            _options.HookRegistryType = hRegType;
+            if (hRegType == null)
             {
                 throw new InvalidDataException("The HooksRegistry library does not contain `Hooks.HookRegistry`!");
             }
         }
 
+        // Loads the hookregistry library into our AppDomain to collect all hooking classes.
         void FindNecessaryTypes()
-        {
+        {      
             // We need to locate Hookregistry
             var hr = Assembly.LoadFrom(_options.HooksRegistryFilePath);
             // var ra = hr.GetReferencedAssemblies();
             Type hrType = hr.GetType("Hooks.HookRegistry", true);
-            _options.HookRegistryType = hrType;
             // Also initialise the type
             // Initialise the Hookregistery class while defering initialisation of dynamic types.
-            // Doing dynamic stuff write-locks library files which we need to write to in the end!
+            // Doing dynamic stuff write-locks library files who need to be written to eventually!
             hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { (object)false });
 
             // Locate all Hook classes
@@ -155,7 +159,7 @@ namespace Hooker
             }
         }
 
-        // Calls each GetExpectedMethods function defined in the hookregistry
+        // Calls GetExpectedMethods from each hooking class contained in HookRegistry.
         void FetchExpectedMethods()
         {
             List<string> temp = new List<string>();
@@ -268,6 +272,8 @@ namespace Hooker
                         library.Backup();
                         // Save the manipulated assembly
                         library.Save();
+
+                        // TODO UNCOMMENT
                         // Overwrite the original with the hooked one
                         File.Copy(libraryOutPath, libraryPath, true);
                     }

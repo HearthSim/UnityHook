@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -217,20 +216,6 @@ namespace Hooks.PacketDumper
             }
 
             return _thisObj;
-        }
-    }
-
-    public static class TeeStreamHelper
-    {
-        // Returns the state of a given TcpClient object. This method can be used to 
-        // determine the state of the tcp connection before writing.
-        // TcpState.Established is the valid state where writing/reading is allowed.
-        public static TcpState GetState(this TcpClient tcpClient)
-        {
-            var foo = IPGlobalProperties.GetIPGlobalProperties()
-              .GetActiveTcpConnections()
-              .SingleOrDefault(x => x.LocalEndPoint.Equals(tcpClient.Client.LocalEndPoint));
-            return foo != null ? foo.State : TcpState.Unknown;
         }
     }
 }

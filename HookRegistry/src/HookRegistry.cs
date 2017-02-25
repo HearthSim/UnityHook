@@ -24,6 +24,7 @@ namespace Hooks
         public const string LIB_UNITY_NAME = "UnityEngine.dll";
         public const string LIB_CSHARP_NAME = "Assembly-CSharp.dll";
         public const string LIB_CSHARP_FIRSTP_NAME = "Assembly-CSharp-firstpass.dll";
+        public const string LIB_PLAYMAKER_NAME = "PlayMaker.dll";
 
         // All callback functions registered to with this object
         List<Callback> callbacks = new List<Callback>();

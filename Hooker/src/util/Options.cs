@@ -78,7 +78,7 @@ namespace Hooker
         public AssemblyDefinition HooksRegistryAssembly;
         // Type where all hooks are registered. This is also the type that gets called by 
         // the hooking code and delegates to the hooked methods
-        public Type HookRegistryType;
+        public TypeDefinition HookRegistryType;
     }
 
     // Specifically to Restore operations
