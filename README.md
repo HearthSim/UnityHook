@@ -6,6 +6,18 @@ specifically assemblies compiled for [Unity3d](http://unity3d.com/) games.
 Installed hooks allow overriding hooked functions' return values, essentially
 granting complete control over managed code execution in a targeted game.
 
+# Code formatting
+
+This project uses [AStyle](http://astyle.sourceforge.net/) to keep it's contents formatted.
+Take the following steps to format all source code:
+
+1. Download [AStyle](http://astyle.sourceforge.net/)
+2. If needed, compile, and add the binary to your PATH variable
+3. Run the formatter on all *.cs files with the formatting options file found in the root of the repo.
+When using the recursive option, don't let your terminal expand the wildcard. 
+AStyle is capable of handling the wildcard itself.
+eg; ```astyle.exe --options=hearthsim_codestyle.ini --recursive "./*.cs"```
+
 # Minimal dependancies
 
 This branch tries to keep the amount of compile-time dependancies as small as possible. Minimal compile-time dependancies 
