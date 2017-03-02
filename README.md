@@ -13,7 +13,7 @@ Take the following steps to format all source code:
 
 1. Download [AStyle](http://astyle.sourceforge.net/)
 2. If needed, compile, and add the binary to your PATH variable
-3. Run the formatter on all *.cs files with the formatting options file found in the root of the repo.
+3. Run the formatter on all \*.cs files with the formatting options file found in the root of the repo.
 When using the recursive option, don't let your terminal expand the wildcard. 
 AStyle is capable of handling the wildcard itself.
 eg; ```astyle.exe --options=hearthsim_codestyle.ini --recursive "./*.cs"```
