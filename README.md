@@ -6,7 +6,7 @@ specifically assemblies compiled for [Unity3d](http://unity3d.com/) games.
 Installed hooks allow overriding hooked functions' return values, essentially
 granting complete control over managed code execution in a targeted game.
 
-# Code formatting
+## Code formatting
 
 This project uses [AStyle](http://astyle.sourceforge.net/) to keep it's contents formatted.
 Take the following steps to format all source code:
@@ -18,7 +18,7 @@ When using the recursive option, don't let your terminal expand the wildcard.
 AStyle is capable of handling the wildcard itself.
 eg; ```astyle.exe --options=hearthsim_codestyle.ini --recursive "./*.cs"```
 
-# Minimal dependancies
+## Minimal dependancies
 
 This branch tries to keep the amount of compile-time dependancies as small as possible. Minimal compile-time dependancies 
 make it easier to distribute the **HooksRegistry** binary (and independant of **Hooker**). All compiled binaries are more robust 
@@ -36,7 +36,7 @@ interesting and challenging to work on!
 4. Build project **HookRegistry**;
 5. All binary files can be found inside the `bin` folder of each project.
 
-## Hooker
+### Hooker
 
 **Hooker** is the project that actually injects code into original game assemblies/libraries (= .dll files).
 It can be used to 'hook' and 'restore' assemblies. Run `hooker.exe help` for information about the options to pass.
@@ -45,7 +45,7 @@ The **Hooker** currently has support for following games
 
 - Hearthstone
 
-## HookRegistry
+### HookRegistry
 
 **HookRegistry** is the project that contains code to be executed when a hooked method/function has been called
 while the game is running. The project compiles to 1 binary file that must be passed to **Hooker**.
@@ -94,3 +94,7 @@ Steps
 3. Run the Game - Watch the game log for lines starting with [HOOKER].
 
 > To restore, run the command ```{HOOKERPATH}\Hooker.exe restore -d "{GAMEDIR}"```
+
+## Remarks
+
+* This project is intended to run within the context of the Unity Engine. If Unity Engine is *not* initialised when HookRegistry is initialised, then the hooked functionality will not be run. Each method will perform as if unhooked when outside of the Unity Engine context.

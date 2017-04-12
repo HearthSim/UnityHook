@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Security;
 
 [assembly: AssemblyTitle("HookRegistry")]
 [assembly: AssemblyVersion("1.0.0.0")]
@@ -13,6 +14,7 @@ namespace Hooks
 		// Represents UnityEngine.Debug.Log(string).
 		// Usage: _LogMethod.Invoke(null, new[]{messagestring})
 		private MethodInfo _LogMethod;
+		private MethodInfo _IsInGameMethod;
 
 		// Method signature definition.
 		// This thing defines the needed structure for a certain function call.
@@ -41,6 +43,7 @@ namespace Hooks
 		private List<object> activeHooks = new List<object>();
 
 		private static HookRegistry _instance;
+		private bool _IsWithinUnity = false;
 
 		public static HookRegistry Get(bool initDynamicCalls = true)
 		{
@@ -59,6 +62,9 @@ namespace Hooks
 				}
 				// Setup all hook information
 				_instance.LoadRuntimeHooks(initDynamicCalls);
+
+				// Test if this code is running within the Unity Engine
+				_instance.TestInGame();
 
 			}
 			return _instance;
@@ -82,13 +88,50 @@ namespace Hooks
 			var unityType = unityAssembly.GetType("UnityEngine.Debug");
 			_LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public,
 											 Type.DefaultBinder, new Type[] { typeof(string) }, null);
+
+			var unityApplication = unityAssembly.GetType("UnityEngine.Application");
+			var isPlayingProp = unityApplication.GetProperty("isPlaying",
+															 BindingFlags.Static | BindingFlags.Public);
+			// Silently fail if we cannot determing if we are running within the Unity engine or not!
+			// If the property is not found _IsInGameMethod stays null.
+			if (isPlayingProp != null)
+			{
+				_IsInGameMethod = isPlayingProp.GetGetMethod();
+			}
+		}
+
+		private void TestInGame()
+		{
+			try
+			{
+				// Only if we are running within the UnityEngine, we execute our hooks!
+				// This is to prevent acidentally calling Unity functions without the proper initialisation.
+				bool isRunningInUnity = (bool)_IsInGameMethod.Invoke(null, new object[] { });
+				if (isRunningInUnity == true)
+				{
+					_IsWithinUnity = true;
+				}
+			}
+			catch (Exception e)
+			{
+				// We can't let the user know he's not running in the correct context without Unity logging..
+				// This is a SILENT FAIL!
+				if (e is NullReferenceException || e is SecurityException)
+				{
+					// Expected when running outside of UnityEngine
+				}
+				else
+				{
+					// Unexpected
+				}
+			}
 		}
 
 		// Wrapper around the log method from unity.
 		// This method writes to the log file of the unity game
 		public void Log(string message)
 		{
-			if (_LogMethod != null)
+			if (_LogMethod != null && _IsWithinUnity)
 			{
 				// Create a nice format before printing to log
 				var logmessage = String.Format("[HOOKER]\t{0}", message);
@@ -154,6 +197,13 @@ namespace Hooks
 		// Call each hook object and return it's response.
 		object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
+			// Without Unity Engine as context, we don't execute the hooks.
+			// This is to prevent accidentally calling unity functions without the proper
+			// initialisation.
+			if (!_IsWithinUnity)
+			{
+				return null;
+			}
 
 			MethodBase method = null;
 			try
