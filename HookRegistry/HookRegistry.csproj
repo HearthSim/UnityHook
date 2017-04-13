@@ -37,7 +37,7 @@
     <Compile Include="src\packetdumper\OutgoingPackets.cs" />
     <Compile Include="src\packetdumper\IncomingPackets.cs" />
     <Compile Include="src\packetdumper\TeeStream.cs" />
-    <Compile Include="src\PlayMakerFSM.cs" />
+    <Compile Include="src\unmaintained\PlayMakerFSM.cs" />
     <Compile Include="src\SSLDisable.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -2,9 +2,9 @@
 using System.IO;
 using System.Reflection;
 
-namespace Hooks
+namespace Hooks.unmaintained
 {
-	[RuntimeHook]
+	// [RuntimeHook]
 	class PlayMakerFSM
 	{
 
