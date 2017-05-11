@@ -5,8 +5,8 @@
 // To enable this hook, add "BattleNetCSharp::Init" to example_hooks
 
 
+using GameKnowledgeBase;
 using System;
-using System.IO;
 using System.Reflection;
 
 namespace Hooks
@@ -42,8 +42,8 @@ namespace Hooks
 		{
 			// Prepare dynamic call to CSharp-firstpass library
 			// Load from assembly file at currently executing path
-			var loc = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_CSHARP_FIRSTP_NAME);
-			Assembly libAssembly = Assembly.LoadFrom(loc);
+			var fistPLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP_FIRSTPASS);
+			Assembly libAssembly = Assembly.LoadFrom(fistPLibPath);
 			TypeSslParams = libAssembly.GetType("bgs.SslParameters");
 			TypeBattleNetC = libAssembly.GetType("bgs.BattleNetCSharp");
 		}

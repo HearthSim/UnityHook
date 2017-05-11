@@ -1,22 +1,11 @@
-﻿using Mono.Cecil;
+﻿using GameKnowledgeBase;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace Hooker
 {
 	class Program
 	{
-		// This path element will be added to the `gamedir` option.
-		// In case the necessary libraries are not located in the root directory of the game folder.
-		// The Unity libraries are located at "Hearthstone_Data\Managed", from the root of HS install folder on Windows
-		// And in Contents/Resources/Data/Managed on macOS
-		public const string WIN_REL_LIBRARY_PATH = "Hearthstone_Data\\Managed";
-		public const string MAC_REL_LIBRARY_PATH = "Contents/Resources/Data/Managed";
-
-
 		// Operation verbs
 		public const string OPERATION_HOOK = "hook";
 		public const string OPERATION_RESTORE = "restore";
@@ -36,20 +25,6 @@ namespace Hooker
 
 			// Check the game path
 			var gamePath = Path.GetFullPath(options.GamePath);
-
-			// Append relative directory to library files
-			int p = (int)Environment.OSVersion.Platform;
-			if ((p == 4) || (p == 6) || (p == 128))
-			{
-				// Running macOS
-				gamePath = Path.Combine(gamePath, MAC_REL_LIBRARY_PATH);
-			}
-			else
-			{
-				// Running Windows
-				gamePath = Path.Combine(gamePath, WIN_REL_LIBRARY_PATH);
-			}
-
 			options.GamePath = gamePath;
 			if (!Directory.Exists(gamePath))
 			{
@@ -61,7 +36,9 @@ namespace Hooker
 		{
 			// Operation
 			string invokedOperation = "";
-			// Options for that operation
+			// General options.
+			GeneralOptions generalOptions = null;
+			// Options specific to the action to perform.
 			object invokedOperationOptions = null;
 
 			var opts = new Options();
@@ -71,28 +48,23 @@ namespace Hooker
 				Console.WriteLine(opts.GetUsage("help"));
 				goto ERROR;
 			}
-			if (!CommandLine.Parser.Default.ParseArgumentsStrict(args, opts,
-																 (verb, subOptions) =>
-		{
-			invokedOperation = verb;
-			invokedOperationOptions = subOptions;
-		},
-		() =>
-		{
-			// Console.WriteLine("Failed to parse arguments!");
-			// Failed to parse, exit the program
-			Environment.Exit(-2);
-			}))
+
+			CommandLine.Parser.Default.ParseArgumentsStrict(args, opts, (verb, subOptions) =>
 			{
-				// The parser will have written usage information.
-				// This might happen because options were misspelled or not given.
-				goto ERROR;
-			}
+				// Action to store correct information for further instructing the processor.
+				invokedOperation = verb;
+				invokedOperationOptions = subOptions;
+			}, () =>
+			{
+				// Failed attempt at parsing the provided arguments.
+				Environment.Exit(-2);
+			});
 
 			try
 			{
 				// Process general options
-				Prepare((GeneralOptions)invokedOperationOptions);
+				generalOptions = (GeneralOptions)invokedOperationOptions;
+				Prepare(generalOptions);
 			}
 			catch (Exception e)
 			{
@@ -100,22 +72,26 @@ namespace Hooker
 				goto ERROR;
 			}
 
+			// Use knowledge about the game HearthStone. Game knowledge is defined in the shared code
+			// project KnowledgeBase. See `GameKnowledgeBase.HSKB` for more information.
+			// Change the following line if you want to hook another game.
+			GameKB gameKnowledge = HSKB.Get(generalOptions.GamePath);
+
 			try
 			{
 				switch (invokedOperation)
 				{
 					case OPERATION_HOOK:
 						var hookHelper = new HookHelper((HookSubOptions)invokedOperationOptions);
-						hookHelper.TryHook();
+						hookHelper.TryHook(gameKnowledge);
 						Log.Info("Succesfully hooked the game libraries!");
 						break;
 					case OPERATION_RESTORE:
 						var restore = new Restore((RestoreSubOptions)invokedOperationOptions);
-						restore.TryRestore();
+						restore.TryRestore(gameKnowledge);
 						Log.Info("Succesfully restored the original game libraries!");
 						break;
 					default:
-						// Error happened
 						throw new ArgumentException("Invalid verb processed");
 				}
 			}

@@ -1,4 +1,5 @@
-﻿using Hooks;
+﻿using GameKnowledgeBase;
+using Hooker.util;
 using Mono.Cecil;
 using System;
 using System.Collections.Generic;
@@ -206,45 +207,33 @@ namespace Hooker
 			}
 		}
 
-		public void TryHook()
+		public void TryHook(GameKB gameKnowledge)
 		{
 			// Validate all command line options.
 			CheckOptions();
 			// Copy our injected library to the location of the 'to hook' assemblies.
 			CopyHooksLibrary();
-
+			//
 			FindNecessaryTypes();
 			// Find all expected method fullnames by HookRegistry.
 			FetchExpectedMethods();
 
 			var hookEntries = ReadHooksFile(_options.HooksFilePath);
 
-			// Initialise the AssemblyStore with the given path.
-			// All assemblies are parsed from their own location.
-			var asStore = AssemblyStore.Get(_options.GamePath);
-
-			// Loop all libraries looking for methods to hook       ! important - core
-			// Library is a reference to the filename of the assembly file containing the actual
-			// code we want to patch.
-			foreach (AssemblyStore.LIB_TYPE library in AssemblyStore.GetAllLibraryTypes())
+			// Iterate all libraries known for the provided game.
+			// An assembly blueprint will be created from the yielded filenames.
+			// The blueprints will be edited, saved and eventually replaces the original assembly.
+			foreach (string libraryFileName in gameKnowledge)
 			{
-				// Skip invalid lib!
-				if (library == AssemblyStore.LIB_TYPE.INVALID)
-				{
-					continue;
-				}
-
-				// Full path to current assembly
-				string libraryPath = library.GetPath();
-				// Full path to processed assembly
-				string libraryOutPath = library.GetPathOut();
+				var libBackupPath = AssemblyHelper.GetPathBackup(libraryFileName);
+				var libPatchedPath = AssemblyHelper.GetPathOut(libraryFileName);
 
 				// Load the assembly file
-				AssemblyDefinition assembly;
-				AssemblyStore.GetAssembly(library, out assembly);
+				AssemblyDefinition assembly = AssemblyHelper.LoadAssembly(libraryFileName,
+																		  gameKnowledge.LibraryPath);
 				if (assembly.HasPatchMark())
 				{
-					Program.Log.Warn(ASSEMBLY_ALREADY_PATCHED, libraryPath);
+					Program.Log.Warn(ASSEMBLY_ALREADY_PATCHED, libraryFileName);
 					continue;
 				}
 
@@ -252,7 +241,7 @@ namespace Hooker
 				// The wrapper facilitates hooking into method calls.
 				ModuleDefinition mainModule = assembly.MainModule;
 				Hooker wrapper = Hooker.New(mainModule, _options);
-				Program.Log.Info(CHECKING_ASSEMBLY, libraryPath);
+				Program.Log.Info(CHECKING_ASSEMBLY, libraryFileName);
 
 				// Keep track of hooked methods
 				bool isHooked = false;
@@ -277,17 +266,25 @@ namespace Hooker
 					if (isHooked)
 					{
 						// Generate backup from original file
-						library.Backup();
-						// Save the manipulated assembly
-						library.Save();
+						try
+						{
+							// This throws if the file already exists.
+							File.Copy(libraryFileName, libBackupPath, false);
+						}
+						catch (Exception)
+						{
+							// Do nothing
+						}
 
-						// TODO UNCOMMENT
+						// Save the manipulated assembly.
+						assembly.Save(libPatchedPath);
+
 						// Overwrite the original with the hooked one
-						File.Copy(libraryOutPath, libraryPath, true);
+						File.Copy(libPatchedPath, libraryFileName, true);
 					}
 					else
 					{
-						Program.Log.Debug(ASSEMBLY_NOT_PATCHED, libraryPath);
+						Program.Log.Debug(ASSEMBLY_NOT_PATCHED, libraryFileName);
 					}
 				}
 				catch (IOException e)
@@ -301,7 +298,7 @@ namespace Hooker
 
 					throw;
 				}
-			} // End foreach LIB_TYPE
+			}
 		}
 	}
 }

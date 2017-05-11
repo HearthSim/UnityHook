@@ -6,6 +6,7 @@
 // The HookRegistry library file, compilated unit of this project, will be copied
 // next to the game libraries by the Hooker project.
 
+using GameKnowledgeBase;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -34,18 +35,6 @@ namespace Hooks
 		// In our case it's the signature of a onCall(..) function defined in each hook class.
 		public delegate object Callback(string typeName, string methodName, object thisObj,
 										object[] args);
-
-		// Path of the parent directory of the currently executing library file.
-		// See Init(..).
-		public static string LibLocation
-		{
-			get;
-			private set;
-		}
-		public const string LIB_UNITY_NAME = "UnityEngine.dll";
-		public const string LIB_CSHARP_NAME = "Assembly-CSharp.dll";
-		public const string LIB_CSHARP_FIRSTP_NAME = "Assembly-CSharp-firstpass.dll";
-		public const string LIB_PLAYMAKER_NAME = "PlayMaker.dll";
 
 		// All callback functions registered to with this object
 		private List<Callback> callbacks = new List<Callback>();
@@ -93,14 +82,16 @@ namespace Hooks
 			// it will return the location of the Assembly DOING the incovation!
 			var assemblyPath = Assembly.GetExecutingAssembly().Location;
 			var assemblyDirPath = Path.GetDirectoryName(assemblyPath);
-			LibLocation = assemblyDirPath;
+			// Initialise the game knowledge database with the discovered path.
+			HSKB.Get(assemblyDirPath);
 		}
 
 		// Load necessary types for dynamic method calls
 		private void PrepareDynamicCalls()
 		{
 			// Prepare dynamic call to Unity
-			Assembly unityAssembly = Assembly.LoadFrom(Path.Combine(LibLocation, LIB_UNITY_NAME));
+			var unityLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.UNITY_ENGINE);
+			Assembly unityAssembly = Assembly.LoadFrom(unityLibPath);
 			var unityType = unityAssembly.GetType("UnityEngine.Debug");
 			_LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public,
 											 Type.DefaultBinder, new Type[] { typeof(string) }, null);

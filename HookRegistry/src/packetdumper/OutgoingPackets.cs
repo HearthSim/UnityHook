@@ -1,5 +1,5 @@
-﻿using System;
-using System.IO;
+﻿using GameKnowledgeBase;
+using System;
 using System.Reflection;
 
 namespace Hooks.PacketDumper
@@ -40,16 +40,15 @@ namespace Hooks.PacketDumper
 		{
 			// Prepare dynamic call to CSharp-firstpass library
 			// Load from assembly file at currently executing path
-			var locFirstPass = Path.Combine(HookRegistry.LibLocation,
-											HookRegistry.LIB_CSHARP_FIRSTP_NAME);
-			Assembly libFirstPass = Assembly.LoadFrom(locFirstPass);
+			var fistPLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP_FIRSTPASS);
+			Assembly libFirstPass = Assembly.LoadFrom(fistPLibPath);
 			TypeBattleNetPacket = libFirstPass.GetType("bgs.BattleNetPacket");
 
 			TypeSslConnection = libFirstPass.GetType("bgs.SslClientConnection");
 			TypeClientConnection = libFirstPass.GetType("bgs.ClientConnection`1");
 
-			var loc = Path.Combine(HookRegistry.LibLocation, HookRegistry.LIB_CSHARP_NAME);
-			Assembly lib = Assembly.LoadFrom(loc);
+			var libPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP);
+			Assembly lib = Assembly.LoadFrom(libPath);
 			TypePegasusPacket = lib.GetType("PegasusPacket");
 
 			// Construct generic substituted types

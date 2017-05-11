@@ -1,7 +1,7 @@
-﻿using Hooks;
+﻿using GameKnowledgeBase;
+using Hooker.util;
 using System;
 using System.IO;
-using System.Linq;
 
 namespace Hooker
 {
@@ -26,42 +26,28 @@ namespace Hooker
 			// Game path is already checked at Program
 		}
 
-		public void TryRestore()
+		public void TryRestore(GameKB gameKnowledge)
 		{
 			// Check the options
 			CheckOptions();
 
-			// Fetch list of filenames which contain .original
-			var pattern = string.Format("*{0}*", AssemblyStore.AssemblyBackupAffix);
-			var affixLength = AssemblyStore.AssemblyBackupAffix.Length;
-			var originals = Directory.GetFiles(_options.GamePath, pattern);
-			// Cut off extension and backup affix
-			var fileNamesNoExt = originals.Select(str =>
+			// Iterate all known libraries for the game.
+			foreach (var gameLibFileName in gameKnowledge)
 			{
-				// Returns only the name of the file
-				var noExt = Path.GetFileNameWithoutExtension(str);
-				// Prepend the original path
-				noExt = Path.Combine(Path.GetDirectoryName(str), noExt);
-				var noExtLength = noExt.Length;
-				var noAffix = noExt.Substring(0, noExtLength - affixLength);
-				return noAffix;
-			}).ToArray();
-
-			// Loop all filnames to restore originals
-			for (int i = 0; i < originals.Length; ++i)
-			{
-				var reconstructed = fileNamesNoExt[i] + ".dll";
-				var backup = originals[i];
-
-				try
+				var backupLibPath = AssemblyHelper.GetPathBackup(gameLibFileName);
+				if (File.Exists(backupLibPath))
 				{
-					File.Copy(backup, reconstructed, true);
-					Program.Log.Info(FILE_RESTORED, reconstructed);
-				}
-				catch (Exception e)
-				{
-					// This is actually really bad.. but we'll continue to restore originals
-					Program.Log.Exception(ERR_RESTORE_FILE, e, backup);
+					// Restore the original file.
+					try
+					{
+						File.Copy(backupLibPath, gameLibFileName);
+						Program.Log.Info(FILE_RESTORED, backupLibPath);
+					}
+					catch (Exception e)
+					{
+						// This is actually really bad.. but we'll continue to restore other originals.
+						Program.Log.Exception(ERR_RESTORE_FILE, e, backupLibPath);
+					}
 				}
 			}
 		}
