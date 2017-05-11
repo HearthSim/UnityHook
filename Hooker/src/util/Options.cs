@@ -95,7 +95,7 @@ namespace Hooker
 
 		[Option('l', "libfile", Required = false, DefaultValue = "HookRegistry.dll",
 				HelpText =
-					"The the library that contains the functionality that gets executed when a hooked method triggers.")]
+					"The library that contains the functionality that gets executed when a hooked method triggers.")]
 		public string HooksRegistryFilePath
 		{
 			get;
