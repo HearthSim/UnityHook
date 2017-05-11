@@ -2,7 +2,7 @@
 // NOTE: This is designed for use with 3rd party servers that don't support TLS connections
 // and will cause the Hearthstone client to fail to connect to an official server, therefore
 // it is disabled by default.
-// To enable this hook, add "BattleNetCSharp.Init" to example_hooks
+// To enable this hook, add "BattleNetCSharp::Init" to example_hooks
 
 
 using System;
@@ -14,6 +14,9 @@ namespace Hooks
 	[RuntimeHook]
 	class SSLDisable
 	{
+		private const string DYNAMIC_CALL_FAILED =
+			"BattleNetCSharp.Init(..) failed for the following reason: {0}\n{1}";
+
 		// Represents bgs.SslParameters
 		private Type TypeSslParams;
 		// Represents bgs.BattleNetCSharp
@@ -45,12 +48,18 @@ namespace Hooks
 			TypeBattleNetC = libAssembly.GetType("bgs.BattleNetCSharp");
 		}
 
+		// Expects an object of type `bgs.SslParameters`, no validation is done within the method body.
+		// This method manipulates the provided object into one that will not trigger creation of an
+		// encrypted connection.
 		private void DisableSSL(ref object sslparamobject)
 		{
 			// Use the type definition to set the correct bits to false
 			TypeSslParams.GetField("useSsl").SetValue(sslparamobject, (object)false);
 		}
 
+		// Expects an object of type `bgs.BattleNetCSharp` and arguments to pass into the
+		// `bgs.BattleNetCSharp::Init(..)` method.
+		// This method invokes the Init function dynamically.
 		private object ProxyBNetInit(ref object bnetobject, object[] args)
 		{
 			// Dynamically invoke the Init method as defined by the type
@@ -58,8 +67,8 @@ namespace Hooks
 			return initMethod.Invoke(bnetobject, args);
 		}
 
-		// Returns a list of methods (full names) that this hook expects.
-		// The Hooker will cross reference all returned methods with the requested methods.
+		// Returns a list of methods (full names) this hook expects.
+		// The Hooker will cross reference all returned methods with the methods it tries to hook.
 		public static string[] GetExpectedMethods()
 		{
 			return new string[] { "bgs.BattleNetCSharp::Init" };
@@ -72,7 +81,7 @@ namespace Hooks
 				return null;
 			}
 
-			// This is a call from ourselves, so return null to prevent calling ourselves in an infinite loop.
+			// This is a call from ourselves, so return null to prevent calling ourselves in an infinite loop!
 			if (reentrant)
 			{
 				return null;
@@ -80,20 +89,20 @@ namespace Hooks
 
 			try
 			{
+				// We emulate the execution of the following function, with tweaked parameter `sslParams`.
+				//
 				// public bool Init(bool internalMode, string userEmailAddress, string targetServer,
 				//                  int port, SslParameters sslParams);
 
-				DisableSSL(ref args[4]); // Param sslParams
-				// We actually call OURSELVES here, hence the reentrant
+				DisableSSL(ref args[4]); // args[4] = Param sslParams
+				// We actually call OURSELVES here, hence the reentrant.
 				reentrant = true;
 				return ProxyBNetInit(ref thisObj, args);
 			}
 			catch (Exception e)
 			{
 				// Write meaningful information to the game output
-				var message =
-					String.Format("BattleNetCSharp.Init(..) failed for the following reason: {0}\n{1}",
-								  e.Message, e.StackTrace);
+				var message = string.Format(DYNAMIC_CALL_FAILED, e.Message, e.StackTrace);
 				HookRegistry.Panic(message);
 			}
 
