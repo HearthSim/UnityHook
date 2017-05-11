@@ -1,4 +1,12 @@
-﻿using System;
+﻿// Assembly wide entry point for hooked methods (within game libraries).
+// The purpose of this project is to have NO DEPENDANCIES which facilitates
+// it's distribution and installment.
+// If there are introduced dependancies, make sure to copy them to the directory
+// containing all game libraries!
+// The HookRegistry library file, compilated unit of this project, will be copied
+// next to the game libraries by the Hooker project.
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -14,7 +22,12 @@ namespace Hooks
 		// Represents UnityEngine.Debug.Log(string).
 		// Usage: _LogMethod.Invoke(null, new[]{messagestring})
 		private MethodInfo _LogMethod;
+
+		// Represents property getter for `UnityEngine.Application::isPlaying`.
 		private MethodInfo _IsInGameMethod;
+		// TRUE if the current execution context is invoked by Unity.
+		// FALSE if the current execution context is external to Unity.
+		private bool _IsWithinUnity = false;
 
 		// Method signature definition.
 		// This thing defines the needed structure for a certain function call.
@@ -22,7 +35,8 @@ namespace Hooks
 		public delegate object Callback(string typeName, string methodName, object thisObj,
 										object[] args);
 
-		// The path where the currently executing library can be found.
+		// Path of the parent directory of the currently executing library file.
+		// See Init(..).
 		public static string LibLocation
 		{
 			get;
@@ -36,14 +50,16 @@ namespace Hooks
 		// All callback functions registered to with this object
 		private List<Callback> callbacks = new List<Callback>();
 
-		// All declaring (generic) types, for resolving methods from these generic types.
+		// All types which have a generic parameter that are expected to be hooked.
+		// The declaring type is used as structural blueprint for the generic instantiated type.
+		// Basically: Generic instantiations are seperate types, different from the actual type
+		// which holds the generic parameters.
 		private List<RuntimeTypeHandle> declaringTypes = new List<RuntimeTypeHandle>();
 
-		// Objects initialised from all discovered hook classes
+		// Objects initiated and initialised of all discovered hook classes.
 		private List<object> activeHooks = new List<object>();
 
 		private static HookRegistry _instance;
-		private bool _IsWithinUnity = false;
 
 		public static HookRegistry Get(bool initDynamicCalls = true)
 		{
@@ -100,6 +116,7 @@ namespace Hooks
 			}
 		}
 
+		// Method that tests the execution context for the presence of an initialized Unity framework.
 		private void TestInGame()
 		{
 			try
@@ -123,6 +140,7 @@ namespace Hooks
 				else
 				{
 					// Unexpected
+					throw;
 				}
 			}
 		}
@@ -175,15 +193,9 @@ namespace Hooks
 			HookRegistry.Get().callbacks.Remove(cb);
 		}
 
-		// Install hook listeners by classes that have the [RuntimeHook] attribute
+		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
 		void LoadRuntimeHooks(bool initDynamicCalls)
 		{
-			// Loop all types defined in this assembly file; read - the HookRegistry project
-			// The game might be provided with a custom built core library..
-			// And Reflection.Assembly might as well be the first type it won't contain!
-			// foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
-
-			// Install hook listeners by classes that have the [RuntimeHook] attribute
 			foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
 			{
 				var hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
@@ -197,7 +209,7 @@ namespace Hooks
 		// Call each hook object and return it's response.
 		object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
-			// Without Unity Engine as context, we don't execute the hooks.
+			// Without Unity Engine as context, we don't execute the hook.
 			// This is to prevent accidentally calling unity functions without the proper
 			// initialisation.
 			if (!_IsWithinUnity)
@@ -213,9 +225,8 @@ namespace Hooks
 			}
 			catch (ArgumentException)
 			{
-				// Direct resolution of method definition doesn't work,
-				// probably because of generic parameters.
-				// We must find the declaring type!
+				// Direct resolution of method definition doesn't work, probably because of generic parameters.
+				// We use the blueprints that were registered to try and decode this generic instantiated type.
 				foreach (var declHandle in declaringTypes)
 				{
 					try
@@ -240,7 +251,7 @@ namespace Hooks
 			var typeName = method.DeclaringType.FullName;
 			var methodName = method.Name;
 			var paramString = "..";
-			var message = String.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
+			var message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
 			// Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
 			// This method prints into the game log
@@ -252,7 +263,7 @@ namespace Hooks
 				var o = cb(typeName, methodName, thisObj, args);
 				// If the hook did not return null, return it's response.
 				// This test explicitly ends the enclosing FOR loop, so hooks that were
-				// not executed will be skipped.
+				// not executed yet will not run.
 				if (o != null)
 				{
 					return o;
