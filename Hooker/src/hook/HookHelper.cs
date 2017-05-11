@@ -104,14 +104,7 @@ namespace Hooker
 
 		public void CheckOptions()
 		{
-			// Check if all paths exist
-
 			// Gamedir is general option and is checked by Program!
-			//var gamePath = Path.GetFullPath(_options.GamePath);
-			//if(!Directory.Exists(gamePath))
-			//{
-			//    throw new DirectoryNotFoundException("Exe option `gamedir` is invalid!");
-			//}
 
 			var hooksfile = Path.GetFullPath(_options.HooksFilePath);
 			_options.HooksFilePath = hooksfile;
@@ -127,10 +120,11 @@ namespace Hooker
 				throw new FileNotFoundException("Exe option `libfile` is invalid!");
 			}
 
-			// Save the definition of the to injecting assembly.
+			// Save the definition of the assembly containing our HOOKS.
 			var hooksAssembly = AssemblyDefinition.ReadAssembly(_options.HooksRegistryFilePath);
 			_options.HooksRegistryAssembly = hooksAssembly;
-			// Check if the Hooks.HookRegistry type is present.
+			// Check if the Hooks.HookRegistry type is present, this is the entrypoint for all
+			// hooked methods.
 			var assModule = hooksAssembly.MainModule;
 			var hRegType = assModule.Types.FirstOrDefault(t => t.FullName.Equals("Hooks.HookRegistry"));
 			// Store the HooksRegistry type reference.
@@ -141,21 +135,17 @@ namespace Hooker
 			}
 		}
 
-		// Loads the hookregistry library into our AppDomain to collect all hooking classes.
+		// Loads the hookregistry library into our AppDomain and collect all hooking classes.
 		void FindNecessaryTypes()
 		{
-			// We need to locate Hookregistry
 			var hr = Assembly.LoadFrom(_options.HooksRegistryFilePath);
-			// var ra = hr.GetReferencedAssemblies();
 			Type hrType = hr.GetType("Hooks.HookRegistry", true);
-			// Also initialise the type
 			// Initialise the Hookregistery class while defering initialisation of dynamic types.
-			// Doing dynamic stuff write-locks library files who need to be written to eventually!
+			// Dynamic loading of types write-locks the library files which need to be overwritten after the hooking process!
 			hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null,
 					new object[] { (object)false });
 
-			// Locate all Hook classes
-			// Get RuntimeHook attribute
+			// Locate all Hook classes through the RuntimeHook attribute.
 			var runtimeHookAttr = hr.GetType("Hooks.RuntimeHookAttribute", true);
 			foreach (var type in hr.GetTypes())
 			{
@@ -170,6 +160,9 @@ namespace Hooker
 		}
 
 		// Calls GetExpectedMethods from each hooking class contained in HookRegistry.
+		// The purpose is to track all methods which are expected by all loaded hooks.
+		// Cross referencing this list with all 'to-hook' methods allows us to display
+		// a warning for potentially unexpected behaviour.
 		void FetchExpectedMethods()
 		{
 			List<string> temp = new List<string>();
@@ -194,10 +187,11 @@ namespace Hooker
 			{
 				// Copy the HookRegistry library next to the libraries of the game!
 				File.Copy(_options.HooksRegistryFilePath, libTargetPath, true);
-				// We cannot copy all referenced library files, since that would need the HooksRegistry to load these libraries
-				// before we can query them..
-				// We copy the HooksRegistry Library to not except on the expected game library files who are unreachable.
-				// THE HOOKSREGISTRY FILE MUST NOT HAVE DEPENDANCIES (or have them included in 1 file!)
+				// The HookRegistry library file is copied next to the game libraries because
+				// hooking a library will add a dependancy towards HookRegistry.
+				// HookRegistry is designed to have NO DEPENDANCIES. If you built it with
+				// additional dependancies, they will need to be copied manually to the library
+				// directory!
 
 				// Update registry file path to be around the targetted libraries.
 				_options.HooksRegistryFilePath = libTargetPath;
@@ -214,16 +208,15 @@ namespace Hooker
 
 		public void TryHook()
 		{
-			// Validate all options
+			// Validate all command line options.
 			CheckOptions();
-			// Copy our injected library to the location of the 'to patch' assemblies
+			// Copy our injected library to the location of the 'to hook' assemblies.
 			CopyHooksLibrary();
-			// Find all needed types
+
 			FindNecessaryTypes();
-			// Find all method fullnames that the hookregistry expects
+			// Find all expected method fullnames by HookRegistry.
 			FetchExpectedMethods();
 
-			// Read all hook functions into memory
 			var hookEntries = ReadHooksFile(_options.HooksFilePath);
 
 			// Initialise the AssemblyStore with the given path.
