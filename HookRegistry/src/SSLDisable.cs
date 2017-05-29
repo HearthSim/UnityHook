@@ -5,22 +5,15 @@
 // To enable this hook, add "BattleNetCSharp::Init" to example_hooks
 
 
-using GameKnowledgeBase;
+using bgs;
 using System;
-using System.Reflection;
 
 namespace Hooks
 {
 	[RuntimeHook]
 	class SSLDisable
 	{
-		private const string DYNAMIC_CALL_FAILED =
-			"BattleNetCSharp.Init(..) failed for the following reason: {0}\n{1}";
-
-		// Represents bgs.SslParameters
-		private Type TypeSslParams;
-		// Represents bgs.BattleNetCSharp
-		private Type TypeBattleNetC;
+		private const string HOOK_FAILED = "[SSLDisable] Failed to initialise the game! {0}";
 
 		// This variable is used to control the interception of the hooked method.
 		// When TRUE, we return null to allow normal execution of the function.
@@ -28,24 +21,10 @@ namespace Hooks
 		// This switch allows us to call the original method from within this hook class.
 		private bool reentrant;
 
-		public SSLDisable(bool initDynamicCalls)
+		public SSLDisable()
 		{
 			HookRegistry.Register(OnCall);
 			reentrant = false;
-			if (initDynamicCalls)
-			{
-				PrepareDynamicCalls();
-			}
-		}
-
-		private void PrepareDynamicCalls()
-		{
-			// Prepare dynamic call to CSharp-firstpass library
-			// Load from assembly file at currently executing path
-			var fistPLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP_FIRSTPASS);
-			Assembly libAssembly = Assembly.LoadFrom(fistPLibPath);
-			TypeSslParams = libAssembly.GetType("bgs.SslParameters");
-			TypeBattleNetC = libAssembly.GetType("bgs.BattleNetCSharp");
 		}
 
 		// Expects an object of type `bgs.SslParameters`, no validation is done within the method body.
@@ -54,17 +33,17 @@ namespace Hooks
 		private void DisableSSL(ref object sslparamobject)
 		{
 			// Use the type definition to set the correct bits to false
-			TypeSslParams.GetField("useSsl").SetValue(sslparamobject, (object)false);
+			((SslParameters)sslparamobject).useSsl = false;
 		}
 
 		// Expects an object of type `bgs.BattleNetCSharp` and arguments to pass into the
 		// `bgs.BattleNetCSharp::Init(..)` method.
 		// This method invokes the Init function dynamically.
-		private object ProxyBNetInit(ref object bnetobject, object[] args)
+		private object ProxyBNetInit(ref object bnetObject, object[] args)
 		{
 			// Dynamically invoke the Init method as defined by the type
-			var initMethod = TypeBattleNetC.GetMethod("Init");
-			return initMethod.Invoke(bnetobject, args);
+			var initMethod = typeof(BattleNetCSharp).GetMethod("Init");
+			return initMethod.Invoke(bnetObject, args);
 		}
 
 		// Returns a list of methods (full names) this hook expects.
@@ -101,8 +80,8 @@ namespace Hooks
 			}
 			catch (Exception e)
 			{
-				// Write meaningful information to the game output
-				var message = string.Format(DYNAMIC_CALL_FAILED, e.Message, e.StackTrace);
+				// Write meaningful information to the game output.
+				string message = string.Format(HOOK_FAILED, e.Message);
 				HookRegistry.Panic(message);
 			}
 

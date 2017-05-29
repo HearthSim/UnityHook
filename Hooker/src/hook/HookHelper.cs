@@ -126,8 +126,8 @@ namespace Hooker
 			_options.HooksRegistryAssembly = hooksAssembly;
 			// Check if the Hooks.HookRegistry type is present, this is the entrypoint for all
 			// hooked methods.
-			var assModule = hooksAssembly.MainModule;
-			var hRegType = assModule.Types.FirstOrDefault(t => t.FullName.Equals("Hooks.HookRegistry"));
+			ModuleDefinition assModule = hooksAssembly.MainModule;
+			TypeDefinition hRegType = assModule.Types.FirstOrDefault(t => t.FullName.Equals("Hooks.HookRegistry"));
 			// Store the HooksRegistry type reference.
 			_options.HookRegistryType = hRegType;
 			if (hRegType == null)
@@ -137,7 +137,7 @@ namespace Hooker
 		}
 
 		// Loads the hookregistry library into our AppDomain and collect all hooking classes.
-		void FindNecessaryTypes()
+		void FindHooks()
 		{
 			Assembly hrAssembly = null;
 
@@ -147,8 +147,7 @@ namespace Hooker
 				Type hrType = hrAssembly.GetType("Hooks.HookRegistry", true);
 				// Initialise the Hookregistery class while defering initialisation of dynamic types.
 				// Dynamic loading of types write-locks the library files which need to be overwritten after the hooking process!
-				hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null,
-						new object[] { (object)false });
+				hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { });
 			}
 			catch (Exception e)
 			{
@@ -165,11 +164,11 @@ namespace Hooker
 			}
 
 			// Locate all Hook classes through the RuntimeHook attribute.
-			var runtimeHookAttr = hrAssembly.GetType("Hooks.RuntimeHookAttribute", true);
-			foreach (var type in hrAssembly.GetTypes())
+			Type runtimeHookAttr = hrAssembly.GetType("Hooks.RuntimeHookAttribute", true);
+			foreach (Type type in hrAssembly.GetTypes())
 			{
 				// Match each type against the attribute
-				var hooks = type.GetCustomAttributes(runtimeHookAttr, false);
+				object[] hooks = type.GetCustomAttributes(runtimeHookAttr, false);
 				if (hooks != null && hooks.Length > 0)
 				{
 					// The types that match are Hook classes
@@ -231,12 +230,12 @@ namespace Hooker
 			CheckOptions();
 			// Copy our injected library to the location of the 'to hook' assemblies.
 			CopyHooksLibrary(gameKnowledge);
-			//
-			FindNecessaryTypes();
+			// Locate all hook classes, because they notify us of expected methods.
+			FindHooks();
 			// Find all expected method fullnames by HookRegistry.
 			FetchExpectedMethods();
 
-			var hookEntries = ReadHooksFile(_options.HooksFilePath);
+			List<HOOK_ENTRY> hookEntries = ReadHooksFile(_options.HooksFilePath);
 
 			// Iterate all libraries known for the provided game.
 			// An assembly blueprint will be created from the yielded filenames.
