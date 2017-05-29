@@ -24,24 +24,6 @@ namespace Hooker
 			set;
 		}
 
-		/* Help and usage information */
-		//[HelpOption]
-		//public string GetUsage()
-		//{
-		//    // Get default built helptext
-		//    // The default help text is smart enough to show usage and/or report errors
-		//    var help = HelpText.AutoBuild(this, (HelpText current) =>
-		//    {
-		//        HelpText.DefaultParsingErrorsHandler(this, current);
-		//    });
-
-		//    help.AddDashesToOption = false;
-		//    help.AdditionalNewLineAfterOption = true;
-		//    help.AddPreOptionsLine("Usage: app.exe ACTION [OPTIONS]");
-		//    help.AddPostOptionsLine("Use the verb HELP for option details.");
-		//    return help;
-		//}
-
 		[HelpVerbOption]
 		public string GetUsage(string verb)
 		{
