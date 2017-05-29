@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.6
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hooker", "Hooker\Hooker.csproj", "{33A0B54A-F06A-4C79-98F7-D87AEDFD5C2B}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -11,6 +11,11 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookRegistry", "HookRegistry\HookRegistry.csproj", "{2182CF16-EAFC-45FA-B4FB-274D05EB027E}"
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "GameKnowledgeBase", "GameKnowledgeBase\GameKnowledgeBase.shproj", "{2AFECE69-88C0-4EBC-B06B-241F32D9AFB7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{18A88979-6F70-470C-ABCA-43934331DB74}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
