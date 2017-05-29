@@ -16,20 +16,10 @@ namespace Hooks.PacketDumper
 		private bool reentrant;
 
 
-		public IncomingPackets(bool initDynamicCalls)
+		public IncomingPackets()
 		{
 			HookRegistry.Register(OnCall);
 			reentrant = false;
-
-			if (initDynamicCalls)
-			{
-				PrepareDynamicCalls();
-			}
-		}
-
-		private void PrepareDynamicCalls()
-		{
-
 		}
 
 		// Returns a list of methods (full names) that this hook expects.
@@ -65,16 +55,16 @@ namespace Hooks.PacketDumper
 		// encoding(..) method.
 		private void DumpPacket(string typeName, object thisObj)
 		{
-			TeeStream tee = TeeStream.Get();
+			var tee = TeeStream.Get();
 			// Container for our dumped packet.
-			MemoryStream dataStream = new MemoryStream();
+			var dataStream = new MemoryStream();
 
 			Type packetType = thisObj.GetType();
 
 			if (packetType.Equals(typeof(BattleNetPacket)))
 			{
-				BattleNetPacket packet = ((BattleNetPacket)thisObj);
-				var header = packet.GetHeader();
+				var packet = ((BattleNetPacket)thisObj);
+				bnet.protocol.Header header = packet.GetHeader();
 				var body = packet.GetBody();
 
 				uint headerSize = header.GetSerializedSize();
@@ -91,13 +81,13 @@ namespace Hooks.PacketDumper
 				// Copy body to buffer.
 				dataStream.Write((byte[])body, 0, bodySize);
 
-				var packetData = dataStream.ToArray();
+				byte[] packetData = dataStream.ToArray();
 				// Write data to tee stream.
 				tee.WriteBattlePacket(packetData, true);
 			}
 			else if (packetType.Equals(typeof(PegasusPacket)))
 			{
-				PegasusPacket packet = ((PegasusPacket)thisObj);
+				var packet = ((PegasusPacket)thisObj);
 				var body = packet.GetBody();
 				int type = packet.Type;
 

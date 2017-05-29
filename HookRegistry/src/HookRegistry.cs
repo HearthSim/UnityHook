@@ -44,7 +44,7 @@ namespace Hooks
 
 		private static HookRegistry _instance;
 
-		public static HookRegistry Get(bool initDynamicCalls = true)
+		public static HookRegistry Get()
 		{
 			if (_instance == null)
 			{
@@ -52,15 +52,8 @@ namespace Hooks
 				// Initialise the assembly store.
 				_instance.Init();
 
-				// When loading assemblies, they are writelocked. By defering this initialisation we can still write to
-				// all game assemblies while hooking.
-				if (initDynamicCalls == true)
-				{
-					// Load assembly data for dynamic calls
-					_instance.PrepareDynamicCalls();
-				}
 				// Setup all hook information
-				_instance.LoadRuntimeHooks(initDynamicCalls);
+				_instance.LoadRuntimeHooks();
 
 				try
 				{
@@ -107,7 +100,7 @@ namespace Hooks
 			if (_IsWithinUnity)
 			{
 				// Create a nice format before printing to log
-				var logmessage = String.Format("[HOOKER]\t{0}", message);
+				var logmessage = string.Format("[HOOKER]\t{0}", message);
 				UnityEngine.Debug.Log(logmessage);
 			}
 		}
@@ -149,14 +142,15 @@ namespace Hooks
 		}
 
 		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
-		void LoadRuntimeHooks(bool initDynamicCalls)
+		void LoadRuntimeHooks()
 		{
-			foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+			foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
 			{
-				var hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
+				object[] hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
 				if (hooks != null && hooks.Length > 0)
 				{
-					activeHooks.Add(type.GetConstructor(new Type[] { typeof(bool) }).Invoke(new object[] { (object)initDynamicCalls }));
+					// Get the default constructor.
+					activeHooks.Add(type.GetConstructor(new Type[] { }).Invoke(new object[] { }));
 				}
 			}
 		}
@@ -182,7 +176,7 @@ namespace Hooks
 			{
 				// Direct resolution of method definition doesn't work, probably because of generic parameters.
 				// We use the blueprints that were registered to try and decode this generic instantiated type.
-				foreach (var declHandle in declaringTypes)
+				foreach (RuntimeTypeHandle declHandle in declaringTypes)
 				{
 					try
 					{
@@ -205,15 +199,16 @@ namespace Hooks
 			// Use that information to log the call.
 			var typeName = method.DeclaringType.FullName;
 			var methodName = method.Name;
+			// TODO: replace with parameters of function.
 			var paramString = "..";
 			var message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
 			// Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
-			// This method prints into the game log
+			// This method prints into the game's debug log
 			Log(message);
 
 			// Execute each hook, because we don't know which one to actually target
-			foreach (var cb in callbacks)
+			foreach (Callback cb in callbacks)
 			{
 				var o = cb(typeName, methodName, thisObj, args);
 				// If the hook did not return null, return it's response.

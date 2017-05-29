@@ -6,20 +6,16 @@ namespace Hooks.PacketDumper
 	[RuntimeHook]
 	class OutgoingPackets
 	{
+		private const string SENT_PACKET_NOTIFY = "Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
+
 		private static object[] EMPTY_ARGS = { };
 
 		private bool reentrant;
 
-		public OutgoingPackets(bool initDynamicCalls)
+		public OutgoingPackets()
 		{
 			HookRegistry.Register(OnCall);
 			reentrant = false;
-
-			if (initDynamicCalls)
-			{
-				PrepareDynamicCalls();
-				RegisterGenericDeclaringTypes();
-			}
 		}
 
 		private void PrepareDynamicCalls()
@@ -114,8 +110,7 @@ namespace Hooks.PacketDumper
 					break;
 			}
 
-			var raw = "Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
-			var message = string.Format(raw, packetTypeString, serviceID, methodID,
+			var message = string.Format(SENT_PACKET_NOTIFY, packetTypeString, serviceID, methodID,
 										body.GetType().FullName);
 			HookRegistry.Get().Log(message);
 		}
@@ -138,8 +133,9 @@ namespace Hooks.PacketDumper
 			// Dump the packet..
 			DumpPacket(typeName, args);
 
-			// // Don't proxy, keep going with this method!
-			// ProxySendPacket(typeName, thisObj, args);
+			// Don't proxy, because we don't intend to change the methods behaviour.
+			// By returning null we effectively have appended functionality at the start of the targetted
+			// method.
 
 			reentrant = false;
 
