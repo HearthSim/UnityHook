@@ -3,7 +3,7 @@ using System;
 
 namespace Hooks.PacketDumper
 {
-    [RuntimeHook]
+	[RuntimeHook]
 	class OutgoingPackets
 	{
 		private static object[] EMPTY_ARGS = { };
@@ -49,28 +49,28 @@ namespace Hooks.PacketDumper
 			var tee = TeeStream.Get();
 			object packet = args[0];
 
-            string packetTypeString = "unknown";
-            int methodID = -1;
-            int serviceID = -1;
-            object body = null;
+			string packetTypeString = "unknown";
+			int methodID = -1;
+			int serviceID = -1;
+			object body = null;
 
-            switch (typeName)
+			switch (typeName)
 			{
 				case "bgs.SslClientConnection":
-                    {
-                        // The packet is always battle.net packet
-                        var packetData = ((BattleNetPacket)packet).Encode();
+					{
+						// The packet is always battle.net packet
+						var packetData = ((BattleNetPacket)packet).Encode();
 
-                        // Debug information
-                        var header = ((BattleNetPacket)packet).GetHeader();
-                        packetTypeString = typeof(BattleNetPacket).Name;
-                        methodID = (int)header.MethodId;
-                        serviceID = (int)header.ServiceId;
-                        body = ((BattleNetPacket)packet).GetBody();
+						// Debug information
+						var header = ((BattleNetPacket)packet).GetHeader();
+						packetTypeString = typeof(BattleNetPacket).Name;
+						methodID = (int)header.MethodId;
+						serviceID = (int)header.ServiceId;
+						body = ((BattleNetPacket)packet).GetBody();
 
 
-                        tee.WriteBattlePacket(packetData, false);
-                    }
+						tee.WriteBattlePacket(packetData, false);
+					}
 					break;
 
 				case "bgs.ClientConnection`1":
@@ -81,22 +81,22 @@ namespace Hooks.PacketDumper
 					{
 						byte[] data = ((BattleNetPacket)packet).Encode();
 
-                        // Debug information
-                        var header = ((BattleNetPacket)packet).GetHeader();
-                        packetTypeString = typeof(BattleNetPacket).Name;
-                        methodID = (int)header.MethodId;
-                        serviceID = (int)header.ServiceId;
-                        body = ((BattleNetPacket)packet).GetBody();
+						// Debug information
+						var header = ((BattleNetPacket)packet).GetHeader();
+						packetTypeString = typeof(BattleNetPacket).Name;
+						methodID = (int)header.MethodId;
+						serviceID = (int)header.ServiceId;
+						body = ((BattleNetPacket)packet).GetBody();
 
-                        tee.WriteBattlePacket(data, false);
+						tee.WriteBattlePacket(data, false);
 					}
 					else if (argType.Equals(typeof(PegasusPacket)))
 					{
-                        byte[] data = ((PegasusPacket)packet).Encode();
+						byte[] data = ((PegasusPacket)packet).Encode();
 
-                        // Debug information
-                        serviceID = ((PegasusPacket)packet).Type;
-                        body = ((PegasusPacket)packet).GetBody();
+						// Debug information
+						serviceID = ((PegasusPacket)packet).Type;
+						body = ((PegasusPacket)packet).GetBody();
 
 						tee.WritePegasusPacket(data, false);
 					}
@@ -114,9 +114,10 @@ namespace Hooks.PacketDumper
 					break;
 			}
 
-            var raw = "Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
-            var message = string.Format(raw, packetTypeString, serviceID, methodID, body.GetType().FullName);
-            HookRegistry.Get().Log(message);
+			var raw = "Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
+			var message = string.Format(raw, packetTypeString, serviceID, methodID,
+										body.GetType().FullName);
+			HookRegistry.Get().Log(message);
 		}
 
 		object OnCall(string typeName, string methodName, object thisObj, object[] args)
