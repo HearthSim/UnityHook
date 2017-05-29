@@ -75,7 +75,7 @@ namespace Hooker
 			// Use knowledge about the game HearthStone. Game knowledge is defined in the shared code
 			// project KnowledgeBase. See `GameKnowledgeBase.HSKB` for more information.
 			// Change the following line if you want to hook another game.
-			GameKB gameKnowledge = HSKB.Construct(generalOptions.GamePath);
+			var gameKnowledge = new GameKB(generalOptions.GamePath, new HSKB());
 
 			try
 			{

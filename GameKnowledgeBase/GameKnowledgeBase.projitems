@@ -11,5 +11,6 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)GameKB.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HSKB.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IKnowledge.cs" />
   </ItemGroup>
 </Project>

@@ -3,11 +3,10 @@
 // possibly more.
 
 using System;
-using System.IO;
 
 namespace GameKnowledgeBase
 {
-	class HSKB : GameKB
+	class HSKB : IKnowledge
 	{
 
 		// This path element will be added to the `gamedir` option.
@@ -39,45 +38,43 @@ namespace GameKnowledgeBase
 			"PlayMaker.dll",
 		};
 
-		private static HSKB _thisObject;
-
-		// Array of LIB_TYPE instances which act as key for _assemblyFileNames.
-		private LIB_TYPE[] _assemblyKeys;
-		public LIB_TYPE[] AssemblyKeys
+		public string[] LibraryFileNames
 		{
 			get
 			{
-				if (_assemblyKeys == null)
+				return _assemblyFileNames;
+			}
+		}
+
+		public string LibraryRelativePath
+		{
+			get
+			{
+				int p = (int)Environment.OSVersion.Platform;
+				if ((p == 4) || (p == 6) || (p == 128))
 				{
-					_assemblyKeys = GetAllLibraryTypes();
+					// Running macOS
+					return MAC_REL_LIBRARY_PATH;
 				}
-				return _assemblyKeys;
+				else
+				{
+					// Running Windows
+					return WIN_REL_LIBRARY_PATH;
+				}
 			}
 		}
 
-		private HSKB(string libPath) : base(libPath, _assemblyFileNames)
+		// Array of LIB_TYPE instances which act as key for _assemblyFileNames.
+		private LIB_TYPE[] _libKeys;
+		public LIB_TYPE[] LibKeys
 		{
-		}
-
-		private HSKB(string installPath, bool constructPath) : base(ConstructLibPath(installPath),
-																	_assemblyFileNames)
-		{
-		}
-
-		// Generates the folder path which contains the game libraries.
-		private static string ConstructLibPath(string installPath)
-		{
-			// Append relative directory to library files
-			int p = (int)Environment.OSVersion.Platform;
-			if ((p == 4) || (p == 6) || (p == 128))
+			get
 			{
-				// Running macOS
-				return Path.Combine(installPath, MAC_REL_LIBRARY_PATH);
-			}
-			else
-			{
-				// Running Windows
-				return Path.Combine(installPath, WIN_REL_LIBRARY_PATH);
+				if (_libKeys == null)
+				{
+					_libKeys = GetAllLibraryTypes();
+				}
+				return _libKeys;
 			}
 		}
 
@@ -85,33 +82,11 @@ namespace GameKnowledgeBase
 		{
 			// Construct an array from the LIB_TYPE enum.
 			// The actual underlying type is int, because we enforced that.
-			var generalValues = Enum.GetValues(typeof(LIB_TYPE));
+			Array generalValues = Enum.GetValues(typeof(LIB_TYPE));
 			// But we want LIB_TYPE typed values, so we cast all values
 			return (LIB_TYPE[])generalValues;
 		}
 
-		// If there is no singleton object, it's constructed with the provided install path.
-		// The fame folder structure is appended internally.
-		public static HSKB Construct(string installPath)
-		{
-			if (_thisObject == null)
-			{
-				_thisObject = new HSKB(installPath, true);
-			}
-
-			return _thisObject;
-		}
-
-		// If there is no singleton object, it's constructed with the provided library path.
-		// The libraryPath points to the folder which contains all game libraries.
-		public static HSKB Get(string libPath = null)
-		{
-			if (_thisObject == null)
-			{
-				_thisObject = new HSKB(libPath);
-			}
-
-			return _thisObject;
-		}
+		public HSKB() { }
 	}
 }

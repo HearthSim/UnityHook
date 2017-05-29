@@ -40,8 +40,8 @@ namespace Hooker
 			// Fetch types and references
 			TypeDefinition _hookRegistryType = options.HookRegistryType;
 			// Look for the HookRegistry.onCall(..) method
-			var onCallMethod = _hookRegistryType.Methods.First(mi => mi.Name.Equals("OnCall"));
-			var onCallMethodRef = module.Import(onCallMethod);
+			MethodDefinition onCallMethod = _hookRegistryType.Methods.First(mi => mi.Name.Equals("OnCall"));
+			MethodReference onCallMethodRef = module.Import(onCallMethod);
 
 			var newObj = new Hooker
 			{
@@ -75,8 +75,8 @@ namespace Hooker
 			});
 
 			// A Type (probably class) is found, now we test it/them for the requested method
-			var found = false;
-			foreach (var type in matchingTypes)
+			bool found = false;
+			foreach (TypeDefinition type in matchingTypes)
 			{
 				// This time look for an EXACT match with methodName
 				foreach (var method in type.Methods.Where(m => m.Name.Equals(methodName)))
@@ -127,7 +127,8 @@ namespace Hooker
 			}
 			if (method.HasGenericParameters)
 			{
-				// TODO: check if this hook procedure works with generics as-is
+				// TODO: check if this hook procedure works with generics as-is.
+				// Hooking generic classes DOES work.
 				throw new InvalidOperationException("Generic parameters not supported");
 			}
 

@@ -5,70 +5,79 @@ using System.IO;
 
 namespace GameKnowledgeBase
 {
-	public class GameKB : IEnumerable<string>
+	public class GameKB
 	{
-		// Path to the directory provided to this object on initialisation
-		private string _libraryPath;
+		// Information about the game to hook.
+		IKnowledge _gameKnowledge;
+
+		// Path to the install directory of the game.
+		private string _installpath;
+		public string InstallPath
+		{
+			get
+			{
+				return _installpath;
+			}
+		}
+
 		public string LibraryPath
 		{
 			get
 			{
-				return _libraryPath;
+				return Path.Combine(_installpath, _gameKnowledge.LibraryRelativePath);
 			}
 		}
 
 		// Array of important library file names.
-		private string[] _libraryFileNames;
-
-		protected GameKB(string libraryPath, string[] libraryFileNames)
+		private string[] _libraryFilePaths;
+		public string[] LibraryFilePaths
 		{
-			if (libraryFileNames.Length == 0)
+			get
 			{
-				throw new ArgumentException("LibraryFileNames must not be empty!");
-			}
-
-			if (libraryFileNames[0].Trim().Length != 0)
-			{
-				throw new ArgumentException("LibraryFileNames must have an empty first entry!");
-			}
-
-			if (!Directory.Exists(libraryPath))
-			{
-				throw new DirectoryNotFoundException("LibraryPath does not exist!");
-			}
-
-			_libraryPath = libraryPath;
-			_libraryFileNames = libraryFileNames;
-		}
-
-		// Get the full path to the file of the requested library
-		public string GetAssemblyPath(int fileNameIdx)
-		{
-			// Prevent IndexOutOfBounds by testing the value of lib.
-			// 0 is counted as INVALID automatically.
-			if (fileNameIdx < 1 || fileNameIdx >= _libraryFileNames.Length)
-			{
-				throw new ArgumentOutOfRangeException("Parameter lib must be within the valid range!");
-			}
-
-			// Construct the full path for the requested assembly. This requires prepending the path
-			// recorded on initialisation.
-			string fullPath = Path.Combine(_libraryPath, _libraryFileNames[fileNameIdx]);
-			return fullPath;
-		}
-
-		public IEnumerator<string> GetEnumerator()
-		{
-			// Skip the invalid entry.
-			for (int i = 1; i < _libraryFileNames.Length; ++i)
-			{
-				yield return GetAssemblyPath(i);
+				return _libraryFilePaths;
 			}
 		}
 
-		IEnumerator IEnumerable.GetEnumerator()
+		// Construct a new knowledge base with a provided path to the installation folder.
+		public GameKB(string installPath, IKnowledge gameKnowledge)
 		{
-			return GetEnumerator();
+			if (!Directory.Exists(installPath))
+			{
+				throw new ArgumentException("LibraryPath parameter must point to a valid path!");
+			}
+
+			_installpath = Path.GetFullPath(installPath);
+			_gameKnowledge = gameKnowledge ?? throw new ArgumentNullException("GameKnowledge parameter cannot be null!");
+		}
+
+		public static GameKB CreateFromLibraryPath(IKnowledge gameKnowledge, string libPath)
+		{
+			string libPathPart = gameKnowledge.LibraryRelativePath;
+			if (!libPath.EndsWith(libPathPart))
+			{
+				throw new InvalidOperationException("The provided library path does not match the provided game knowledge base!");
+			}
+			// The install path is the relative library path removed from the full lib path.
+			string installPath = libPath.Remove(libPath.Length - libPathPart.Length);
+			return new GameKB(installPath, gameKnowledge);
+		}
+
+		// Construct the full path of each library defined by the game knowledgebase.
+		private void ConstructLibraryPaths()
+		{
+			string[] fileNames = _gameKnowledge.LibraryFileNames;
+			int libraryCount = fileNames.Length;
+
+			_libraryFilePaths = new string[libraryCount];
+			if (fileNames[0].Length != 0)
+			{
+				throw new InvalidOperationException("The first assembly filename entry MUST be empty!");
+			}
+
+			for (int i = 0; i < libraryCount; ++i)
+			{
+				_libraryFilePaths[i] = Path.Combine(LibraryPath, fileNames[i]);
+			}
 		}
 	}
 }
