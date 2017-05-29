@@ -6,7 +6,7 @@ using System.Timers;
 
 namespace Hooks.PacketDumper
 {
-    class TeeStream
+	class TeeStream
 	{
 		private static object[] EMPTY_ARGS = { };
 
