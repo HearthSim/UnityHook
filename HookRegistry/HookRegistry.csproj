@@ -34,6 +34,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="src\HookRegistry.cs" />
+    <Compile Include="src\packetdumper\DumpServer.cs" />
     <Compile Include="src\packetdumper\OutgoingPackets.cs" />
     <Compile Include="src\packetdumper\IncomingPackets.cs" />
     <Compile Include="src\packetdumper\TeeStream.cs" />
