@@ -6,7 +6,6 @@
 // The HookRegistry library file, compilated unit of this project, will be copied
 // next to the game libraries by the Hooker project.
 
-using GameKnowledgeBase;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -74,16 +73,9 @@ namespace Hooks
 			// All necessary libraries should be next to this assembly file.
 			// GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
 			// it will return the location of the Assembly DOING the incovation!
-			var assemblyPath = Assembly.GetExecutingAssembly().Location;
-			var assemblyDirPath = Path.GetDirectoryName(assemblyPath);
-			// Initialise the game knowledge database with the discovered path.
-			HSKB.Get(assemblyDirPath);
-		}
-
-		// Load necessary types for dynamic method calls
-		private void PrepareDynamicCalls()
-		{
-
+			string assemblyPath = Assembly.GetExecutingAssembly().Location;
+			string assemblyDirPath = Path.GetDirectoryName(assemblyPath);
+			// TODO: see if something needs to be done with the current directory.
 		}
 
 		// Method that tests the execution context for the presence of an initialized Unity framework.
@@ -100,7 +92,7 @@ namespace Hooks
 			if (_IsWithinUnity)
 			{
 				// Create a nice format before printing to log
-				var logmessage = string.Format("[HOOKER]\t{0}", message);
+				string logmessage = string.Format("[HOOKER]\t{0}", message);
 				UnityEngine.Debug.Log(logmessage);
 			}
 		}
@@ -109,7 +101,7 @@ namespace Hooks
 		// This is to make sure we don't break anything.
 		public static void Panic(string message = "")
 		{
-			var msg = string.Format("Forced crash because of error: `{0}` !", message);
+			string msg = string.Format("Forced crash because of error: `{0}` !", message);
 			// Push the message to the game log
 			Get().Log(msg);
 
@@ -197,11 +189,11 @@ namespace Hooks
 
 			// Fetch usefull information from the method definition.
 			// Use that information to log the call.
-			var typeName = method.DeclaringType.FullName;
-			var methodName = method.Name;
+			string typeName = method.DeclaringType.FullName;
+			string methodName = method.Name;
 			// TODO: replace with parameters of function.
-			var paramString = "..";
-			var message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
+			string paramString = "..";
+			string message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
 			// Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
 			// This method prints into the game's debug log
@@ -210,7 +202,7 @@ namespace Hooks
 			// Execute each hook, because we don't know which one to actually target
 			foreach (Callback cb in callbacks)
 			{
-				var o = cb(typeName, methodName, thisObj, args);
+				object o = cb(typeName, methodName, thisObj, args);
 				// If the hook did not return null, return it's response.
 				// This test explicitly ends the enclosing FOR loop, so hooks that were
 				// not executed yet will not run.
