@@ -18,254 +18,217 @@ using System.Security;
 [assembly: AssemblyFileVersion("1.0.0.0")]
 namespace Hooks
 {
-	public class HookRegistry
-	{
-		// Represents UnityEngine.Debug.Log(string).
-		// Usage: _LogMethod.Invoke(null, new[]{messagestring})
-		private MethodInfo _LogMethod;
+    public class HookRegistry
+    {
+        // TRUE if the current execution context is invoked by Unity.
+        // FALSE if the current execution context is external to Unity.
+        private bool _IsWithinUnity = false;
 
-		// Represents property getter for `UnityEngine.Application::isPlaying`.
-		private MethodInfo _IsInGameMethod;
-		// TRUE if the current execution context is invoked by Unity.
-		// FALSE if the current execution context is external to Unity.
-		private bool _IsWithinUnity = false;
+        // Method signature definition.
+        // This thing defines the needed structure for a certain function call.
+        // In our case it's the signature of a onCall(..) function defined in each hook class.
+        public delegate object Callback(string typeName, string methodName, object thisObj,
+                                        object[] args);
 
-		// Method signature definition.
-		// This thing defines the needed structure for a certain function call.
-		// In our case it's the signature of a onCall(..) function defined in each hook class.
-		public delegate object Callback(string typeName, string methodName, object thisObj,
-										object[] args);
+        // All callback functions registered to with this object
+        private List<Callback> callbacks = new List<Callback>();
 
-		// All callback functions registered to with this object
-		private List<Callback> callbacks = new List<Callback>();
+        // All types which have a generic parameter that are expected to be hooked.
+        // The declaring type is used as structural blueprint for the generic instantiated type.
+        // Basically: Generic instantiations are seperate types, different from the actual type
+        // which holds the generic parameters.
+        private List<RuntimeTypeHandle> declaringTypes = new List<RuntimeTypeHandle>();
 
-		// All types which have a generic parameter that are expected to be hooked.
-		// The declaring type is used as structural blueprint for the generic instantiated type.
-		// Basically: Generic instantiations are seperate types, different from the actual type
-		// which holds the generic parameters.
-		private List<RuntimeTypeHandle> declaringTypes = new List<RuntimeTypeHandle>();
+        // Objects initiated and initialised of all discovered hook classes.
+        private List<object> activeHooks = new List<object>();
 
-		// Objects initiated and initialised of all discovered hook classes.
-		private List<object> activeHooks = new List<object>();
+        private static HookRegistry _instance;
 
-		private static HookRegistry _instance;
+        public static HookRegistry Get(bool initDynamicCalls = true)
+        {
+            if (_instance == null)
+            {
+                _instance = new HookRegistry();
+                // Initialise the assembly store.
+                _instance.Init();
 
-		public static HookRegistry Get(bool initDynamicCalls = true)
-		{
-			if (_instance == null)
-			{
-				_instance = new HookRegistry();
-				// Initialise the assembly store.
-				_instance.Init();
+                // When loading assemblies, they are writelocked. By defering this initialisation we can still write to
+                // all game assemblies while hooking.
+                if (initDynamicCalls == true)
+                {
+                    // Load assembly data for dynamic calls
+                    _instance.PrepareDynamicCalls();
+                }
+                // Setup all hook information
+                _instance.LoadRuntimeHooks(initDynamicCalls);
 
-				// When loading assemblies, they are writelocked. By defering this initialisation we can still write to
-				// all game assemblies while hooking.
-				if (initDynamicCalls == true)
-				{
-					// Load assembly data for dynamic calls
-					_instance.PrepareDynamicCalls();
-				}
-				// Setup all hook information
-				_instance.LoadRuntimeHooks(initDynamicCalls);
+                // Test if this code is running within the Unity Engine
+                _instance.TestInGame();
 
-				// Test if this code is running within the Unity Engine
-				_instance.TestInGame();
+            }
+            return _instance;
+        }
 
-			}
-			return _instance;
-		}
+        private void Init()
+        {
+            // All necessary libraries should be next to this assembly file.
+            // GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
+            // it will return the location of the Assembly DOING the incovation!
+            var assemblyPath = Assembly.GetExecutingAssembly().Location;
+            var assemblyDirPath = Path.GetDirectoryName(assemblyPath);
+            // Initialise the game knowledge database with the discovered path.
+            HSKB.Get(assemblyDirPath);
+        }
 
-		private void Init()
-		{
-			// All necessary libraries should be next to this assembly file.
-			// GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
-			// it will return the location of the Assembly DOING the incovation!
-			var assemblyPath = Assembly.GetExecutingAssembly().Location;
-			var assemblyDirPath = Path.GetDirectoryName(assemblyPath);
-			// Initialise the game knowledge database with the discovered path.
-			HSKB.Get(assemblyDirPath);
-		}
+        // Load necessary types for dynamic method calls
+        private void PrepareDynamicCalls()
+        {
+            
+        }
 
-		// Load necessary types for dynamic method calls
-		private void PrepareDynamicCalls()
-		{
-			// Prepare dynamic call to Unity
-			var unityLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.UNITY_ENGINE);
-			Assembly unityAssembly = Assembly.LoadFrom(unityLibPath);
-			var unityType = unityAssembly.GetType("UnityEngine.Debug");
-			_LogMethod = unityType.GetMethod("Log", BindingFlags.Static | BindingFlags.Public,
-											 Type.DefaultBinder, new Type[] { typeof(string) }, null);
+        // Method that tests the execution context for the presence of an initialized Unity framework.
+        private void TestInGame()
+        {
+            try
+            {
+                _IsWithinUnity = UnityEngine.Application.isPlaying;
+            }
+            catch (SecurityException)
+            {
+                // Do nothing
+            }
+        }
 
-			var unityApplication = unityAssembly.GetType("UnityEngine.Application");
-			var isPlayingProp = unityApplication.GetProperty("isPlaying",
-															 BindingFlags.Static | BindingFlags.Public);
-			// Silently fail if we cannot determing if we are running within the Unity engine or not!
-			// If the property is not found _IsInGameMethod stays null.
-			if (isPlayingProp != null)
-			{
-				_IsInGameMethod = isPlayingProp.GetGetMethod();
-			}
-		}
+        // Wrapper around the log method from unity.
+        // This method writes to the log file of the unity game
+        public void Log(string message)
+        {
+            if (_IsWithinUnity)
+            {
+                // Create a nice format before printing to log
+                var logmessage = String.Format("[HOOKER]\t{0}", message);
+                UnityEngine.Debug.Log(logmessage);
+            }
+        }
 
-		// Method that tests the execution context for the presence of an initialized Unity framework.
-		private void TestInGame()
-		{
-			try
-			{
-				// Only if we are running within the UnityEngine, we execute our hooks!
-				// This is to prevent acidentally calling Unity functions without the proper initialisation.
-				bool isRunningInUnity = (bool)_IsInGameMethod.Invoke(null, new object[] { });
-				if (isRunningInUnity == true)
-				{
-					_IsWithinUnity = true;
-				}
-			}
-			catch (Exception e)
-			{
-				// We can't let the user know he's not running in the correct context without Unity logging..
-				// This is a SILENT FAIL!
-				if (e is NullReferenceException || e is SecurityException)
-				{
-					// Expected when running outside of UnityEngine
-				}
-				else
-				{
-					// Unexpected
-					throw;
-				}
-			}
-		}
+        // This function implements behaviour to force a crash in the game.
+        // This is to make sure we don't break anything.
+        public static void Panic(string message = "")
+        {
+            var msg = string.Format("Forced crash because of error: `{0}` !", message);
+            // Push the message to the game log
+            Get().Log(msg);
 
-		// Wrapper around the log method from unity.
-		// This method writes to the log file of the unity game
-		public void Log(string message)
-		{
-			if (_LogMethod != null && _IsWithinUnity)
-			{
-				// Create a nice format before printing to log
-				var logmessage = String.Format("[HOOKER]\t{0}", message);
-				_LogMethod.Invoke(null, new[] { logmessage });
-			}
-		}
+            // Make the game crash!
+            throw new Exception("[HOOKER] Forced crash because of an error!");
+        }
 
-		// This function implements behaviour to force a crash in the game.
-		// This is to make sure we don't break anything.
-		public static void Panic(string message = "")
-		{
-			var msg = string.Format("Forced crash because of error: `{0}` !", message);
-			// Push the message to the game log
-			Get().Log(msg);
+        // First function called by modified libraries.
+        // Return the response coming from the hook, because it's needed by the original library code   ! important
+        public static object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
+        {
+            return HookRegistry.Get().Internal_OnCall(rmh, thisObj, args);
+        }
 
-			// Make the game crash!
-			throw new Exception("[HOOKER] Forced crash because of an error!");
-		}
+        // Add a hook listener
+        public static void Register(Callback cb)
+        {
+            HookRegistry.Get().callbacks.Add(cb);
+        }
 
-		// First function called by modified libraries.
-		// Return the response coming from the hook, because it's needed by the original library code   ! important
-		public static object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
-		{
-			return HookRegistry.Get().Internal_OnCall(rmh, thisObj, args);
-		}
+        public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
+        {
+            HookRegistry.Get().declaringTypes.Add(typeHandle);
+        }
 
-		// Add a hook listener
-		public static void Register(Callback cb)
-		{
-			HookRegistry.Get().callbacks.Add(cb);
-		}
+        // Remove a hook listener
+        public static void Unregister(Callback cb)
+        {
+            HookRegistry.Get().callbacks.Remove(cb);
+        }
 
-		public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
-		{
-			HookRegistry.Get().declaringTypes.Add(typeHandle);
-		}
+        // Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
+        void LoadRuntimeHooks(bool initDynamicCalls)
+        {
+            foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+            {
+                var hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
+                if (hooks != null && hooks.Length > 0)
+                {
+                    activeHooks.Add(type.GetConstructor(new Type[] { typeof(bool) }).Invoke(new object[] { (object)initDynamicCalls }));
+                }
+            }
+        }
 
-		// Remove a hook listener
-		public static void Unregister(Callback cb)
-		{
-			HookRegistry.Get().callbacks.Remove(cb);
-		}
+        // Call each hook object and return it's response.
+        object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
+        {
+            // Without Unity Engine as context, we don't execute the hook.
+            // This is to prevent accidentally calling unity functions without the proper
+            // initialisation.
+            if (!_IsWithinUnity)
+            {
+                return null;
+            }
 
-		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
-		void LoadRuntimeHooks(bool initDynamicCalls)
-		{
-			foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
-			{
-				var hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
-				if (hooks != null && hooks.Length > 0)
-				{
-					activeHooks.Add(type.GetConstructor(new Type[] { typeof(bool) }).Invoke(new object[] { (object)initDynamicCalls }));
-				}
-			}
-		}
+            MethodBase method = null;
+            try
+            {
+                // Try to directly resolve the method definition.
+                method = MethodBase.GetMethodFromHandle(rmh);
+            }
+            catch (ArgumentException)
+            {
+                // Direct resolution of method definition doesn't work, probably because of generic parameters.
+                // We use the blueprints that were registered to try and decode this generic instantiated type.
+                foreach (var declHandle in declaringTypes)
+                {
+                    try
+                    {
+                        method = MethodBase.GetMethodFromHandle(rmh, declHandle);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Do nothing, continue loop..
+                    }
+                }
+            }
 
-		// Call each hook object and return it's response.
-		object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
-		{
-			// Without Unity Engine as context, we don't execute the hook.
-			// This is to prevent accidentally calling unity functions without the proper
-			// initialisation.
-			if (!_IsWithinUnity)
-			{
-				return null;
-			}
+            // Panic if the method variable is still not set.
+            if (method == null)
+            {
+                Panic("Could not resolve the method handle!");
+            }
 
-			MethodBase method = null;
-			try
-			{
-				// Try to directly resolve the method definition.
-				method = MethodBase.GetMethodFromHandle(rmh);
-			}
-			catch (ArgumentException)
-			{
-				// Direct resolution of method definition doesn't work, probably because of generic parameters.
-				// We use the blueprints that were registered to try and decode this generic instantiated type.
-				foreach (var declHandle in declaringTypes)
-				{
-					try
-					{
-						method = MethodBase.GetMethodFromHandle(rmh, declHandle);
-					}
-					catch (ArgumentException)
-					{
-						// Do nothing, continue loop..
-					}
-				}
-			}
+            // Fetch usefull information from the method definition.
+            // Use that information to log the call.
+            var typeName = method.DeclaringType.FullName;
+            var methodName = method.Name;
+            var paramString = "..";
+            var message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
-			// Panic if the method variable is still not set.
-			if (method == null)
-			{
-				Panic("Could not resolve the method handle!");
-			}
+            // Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
+            // This method prints into the game log
+            Log(message);
 
-			// Fetch usefull information from the method definition.
-			// Use that information to log the call.
-			var typeName = method.DeclaringType.FullName;
-			var methodName = method.Name;
-			var paramString = "..";
-			var message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
+            // Execute each hook, because we don't know which one to actually target
+            foreach (var cb in callbacks)
+            {
+                var o = cb(typeName, methodName, thisObj, args);
+                // If the hook did not return null, return it's response.
+                // This test explicitly ends the enclosing FOR loop, so hooks that were
+                // not executed yet will not run.
+                if (o != null)
+                {
+                    return o;
+                }
+            }
+            return null;
+        }
+    }
 
-			// Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
-			// This method prints into the game log
-			Log(message);
-
-			// Execute each hook, because we don't know which one to actually target
-			foreach (var cb in callbacks)
-			{
-				var o = cb(typeName, methodName, thisObj, args);
-				// If the hook did not return null, return it's response.
-				// This test explicitly ends the enclosing FOR loop, so hooks that were
-				// not executed yet will not run.
-				if (o != null)
-				{
-					return o;
-				}
-			}
-			return null;
-		}
-	}
-
-	[AttributeUsage(AttributeTargets.Class, Inherited = false)]
-	public class RuntimeHookAttribute : Attribute
-	{
-	}
+    [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+    public class RuntimeHookAttribute : Attribute
+    {
+    }
 }

@@ -1,26 +1,12 @@
-﻿using GameKnowledgeBase;
+﻿using bgs;
 using System;
-using System.Reflection;
 
 namespace Hooks.PacketDumper
 {
-	[RuntimeHook]
+    [RuntimeHook]
 	class OutgoingPackets
 	{
 		private static object[] EMPTY_ARGS = { };
-
-		// Represents bgs.BattleNetPacket
-		private Type TypeBattleNetPacket;
-		// Represents PegasusPacket
-		private Type TypePegasusPacket;
-
-		// Connection over ssl.
-		private Type TypeSslConnection;
-		// Connection without ssl.
-		private Type TypeClientConnection;
-		// Constructed types with generic params filled in.
-		private Type TypePegasusConnection;
-		private Type TypeBattleNetConnection;
 
 		private bool reentrant;
 
@@ -38,22 +24,7 @@ namespace Hooks.PacketDumper
 
 		private void PrepareDynamicCalls()
 		{
-			// Prepare dynamic call to CSharp-firstpass library
-			// Load from assembly file at currently executing path
-			var fistPLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP_FIRSTPASS);
-			Assembly libFirstPass = Assembly.LoadFrom(fistPLibPath);
-			TypeBattleNetPacket = libFirstPass.GetType("bgs.BattleNetPacket");
 
-			TypeSslConnection = libFirstPass.GetType("bgs.SslClientConnection");
-			TypeClientConnection = libFirstPass.GetType("bgs.ClientConnection`1");
-
-			var libPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP);
-			Assembly lib = Assembly.LoadFrom(libPath);
-			TypePegasusPacket = lib.GetType("PegasusPacket");
-
-			// Construct generic substituted types
-			TypePegasusConnection = TypeClientConnection.MakeGenericType(new Type[] { TypePegasusPacket });
-			TypeBattleNetConnection = TypeClientConnection.MakeGenericType(new Type[] { TypeBattleNetPacket });
 		}
 
 		private void RegisterGenericDeclaringTypes()
@@ -61,7 +32,7 @@ namespace Hooks.PacketDumper
 			// We hook into a method from a generic class, so we want to register
 			// that generic class in order to resolve the generic instantiation of that
 			// method.
-			HookRegistry.RegisterDeclaringType(TypeClientConnection.TypeHandle);
+			HookRegistry.RegisterDeclaringType(typeof(ClientConnection<>).TypeHandle);
 		}
 
 		// Returns a list of methods (full names) that this hook expects.
@@ -71,43 +42,6 @@ namespace Hooks.PacketDumper
 			return new string[] { "bgs.SslClientConnection::SendPacket", "bgs.ClientConnection`1::SendPacket" };
 		}
 
-		private void ProxySendPacket(string typeName, object thisObj, object[] args)
-		{
-			switch (typeName)
-			{
-				case "bgs.SslClientConnection":
-					TypeSslConnection.GetMethod("SendPacket").Invoke(thisObj, args);
-					break;
-
-				case "bgs.ClientConnection`1":
-					// Check type of first (packet) argument to correctly delegate call.
-					Type argType = args[0].GetType();
-
-					if (argType.Equals(TypeBattleNetPacket))
-					{
-						var method = TypeBattleNetConnection.GetMethod("SendPacket");
-						method.Invoke(thisObj, args);
-					}
-					else if (argType.Equals(TypePegasusPacket))
-					{
-						var method = TypePegasusConnection.GetMethod("SendPacket");
-						method.Invoke(thisObj, args);
-					}
-					else
-					{
-						HookRegistry.Panic("Unknown packet type!");
-					}
-
-					break;
-
-				default:
-					// Returning null here would just introduce undefined behaviour
-					var msg = string.Format("Unknown typename: {0}!", typeName);
-					HookRegistry.Panic(msg);
-					break;
-			}
-		}
-
 		// Dump data just as we receive it.
 		private void DumpPacket(string typeName, object[] args)
 		{
@@ -115,26 +49,55 @@ namespace Hooks.PacketDumper
 			var tee = TeeStream.Get();
 			object packet = args[0];
 
-			switch (typeName)
+            string packetTypeString = "unknown";
+            int methodID = -1;
+            int serviceID = -1;
+            object body = null;
+
+            switch (typeName)
 			{
 				case "bgs.SslClientConnection":
-					// The packet is always battle.net packet
-					var packetData = (byte[])TypeBattleNetPacket.GetMethod("Encode").Invoke(packet, EMPTY_ARGS);
-					tee.WriteBattlePacket(packetData, false);
+                    {
+                        // The packet is always battle.net packet
+                        var packetData = ((BattleNetPacket)packet).Encode();
+
+                        // Debug information
+                        var header = ((BattleNetPacket)packet).GetHeader();
+                        packetTypeString = typeof(BattleNetPacket).Name;
+                        methodID = (int)header.MethodId;
+                        serviceID = (int)header.ServiceId;
+                        body = ((BattleNetPacket)packet).GetBody();
+
+
+                        tee.WriteBattlePacket(packetData, false);
+                    }
 					break;
 
 				case "bgs.ClientConnection`1":
 					// Test type of the packet.
 					Type argType = packet.GetType();
 
-					if (argType.Equals(TypeBattleNetPacket))
+					if (argType.Equals(typeof(BattleNetPacket)))
 					{
-						byte[] data = (byte[])TypeBattleNetPacket.GetMethod("Encode").Invoke(packet, EMPTY_ARGS);
-						tee.WriteBattlePacket(data, false);
+						byte[] data = ((BattleNetPacket)packet).Encode();
+
+                        // Debug information
+                        var header = ((BattleNetPacket)packet).GetHeader();
+                        packetTypeString = typeof(BattleNetPacket).Name;
+                        methodID = (int)header.MethodId;
+                        serviceID = (int)header.ServiceId;
+                        body = ((BattleNetPacket)packet).GetBody();
+
+                        tee.WriteBattlePacket(data, false);
 					}
-					else if (argType.Equals(TypePegasusPacket))
+					else if (argType.Equals(typeof(PegasusPacket)))
 					{
-						byte[] data = (byte[])TypePegasusPacket.GetMethod("Encode").Invoke(packet, EMPTY_ARGS);
+                        byte[] data = ((PegasusPacket)packet).Encode();
+
+                        // Debug information
+                        serviceID = ((PegasusPacket)packet).Type;
+                        body = ((PegasusPacket)packet).GetBody();
+
 						tee.WritePegasusPacket(data, false);
 					}
 					else
@@ -150,6 +113,10 @@ namespace Hooks.PacketDumper
 					HookRegistry.Panic(msg);
 					break;
 			}
+
+            var raw = "Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
+            var message = string.Format(raw, packetTypeString, serviceID, methodID, body.GetType().FullName);
+            HookRegistry.Get().Log(message);
 		}
 
 		object OnCall(string typeName, string methodName, object thisObj, object[] args)

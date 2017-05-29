@@ -1,185 +1,160 @@
-﻿using GameKnowledgeBase;
+﻿using bgs;
 using System;
 using System.IO;
-using System.Reflection;
 
 namespace Hooks.PacketDumper
 {
-	[RuntimeHook]
-	class IncomingPackets
-	{
-		object[] EMPTY_ARGS = { };
+    [RuntimeHook]
+    class IncomingPackets
+    {
+        object[] EMPTY_ARGS = { };
 
-		// Represents bgs.BattleNetPacket
-		private Type TypeBattleNetPacket;
-		// Represents bnet.protocol.Header -> the header of battle.net packet
-		private Type TypeBattleNetHeader;
-
-		// Represents PegasusPacket
-		private Type TypePegasusPacket;
-
-		// This variable is used to control the interception of the hooked method.
-		// When TRUE, we return null to allow normal execution of the function.
-		// When FALSE, we hook into the call.
-		// This switch allows us to call the original method from within this hook class.
-		private bool reentrant;
+        // This variable is used to control the interception of the hooked method.
+        // When TRUE, we return null to allow normal execution of the function.
+        // When FALSE, we hook into the call.
+        // This switch allows us to call the original method from within this hook class.
+        private bool reentrant;
 
 
-		public IncomingPackets(bool initDynamicCalls)
-		{
-			HookRegistry.Register(OnCall);
-			reentrant = false;
+        public IncomingPackets(bool initDynamicCalls)
+        {
+            HookRegistry.Register(OnCall);
+            reentrant = false;
 
-			if (initDynamicCalls)
-			{
-				PrepareDynamicCalls();
-			}
-		}
+            if (initDynamicCalls)
+            {
+                PrepareDynamicCalls();
+            }
+        }
 
-		private void PrepareDynamicCalls()
-		{
-			// Prepare dynamic call to CSharp-firstpass library
-			// Load from assembly file at currently executing path
-			var fistPLibPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP_FIRSTPASS);
-			Assembly libFirstPass = Assembly.LoadFrom(fistPLibPath);
-			TypeBattleNetPacket = libFirstPass.GetType("bgs.BattleNetPacket");
-			TypeBattleNetHeader = libFirstPass.GetType("bnet.protocol.Header");
+        private void PrepareDynamicCalls()
+        {
 
-			var libPath = HSKB.Get().GetAssemblyPath((int)HSKB.LIB_TYPE.LIB_CSHARP);
-			Assembly lib = Assembly.LoadFrom(libPath);
-			TypePegasusPacket = lib.GetType("PegasusPacket");
-		}
+        }
 
-		// Returns a list of methods (full names) that this hook expects.
-		// The Hooker will cross reference all returned methods with the requested methods.
-		public static string[] GetExpectedMethods()
-		{
-			return new string[] { "bgs.BattleNetPacket::IsLoaded", "PegasusPacket::IsLoaded" };
-		}
+        // Returns a list of methods (full names) that this hook expects.
+        // The Hooker will cross reference all returned methods with the requested methods.
+        public static string[] GetExpectedMethods()
+        {
+            return new string[] { "bgs.BattleNetPacket::IsLoaded", "PegasusPacket::IsLoaded" };
+        }
 
-		private object ProxyIsLoaded(string typeName, object thisObj)
-		{
-			switch (typeName)
-			{
-				case "bgs.BattleNetPacket":
-					return TypeBattleNetPacket.GetMethod("IsLoaded").Invoke(thisObj, EMPTY_ARGS);
-				case "PegasusPacket":
-					return TypePegasusPacket.GetMethod("IsLoaded").Invoke(thisObj, EMPTY_ARGS);
-				default:
-					// Returning false here would just introduce undefined behaviour
-					HookRegistry.Panic("Unknown typename!");
-					break;
-			}
+        private object ProxyIsLoaded(string typeName, object thisObj)
+        {
+            Type packetType = thisObj.GetType();
 
-			return false;
-		}
+            if (packetType.Equals(typeof(BattleNetPacket)))
+            {
+                return ((BattleNetPacket)thisObj).IsLoaded();
+            }
+            else if (packetType.Equals(typeof(PegasusPacket)))
+            {
+                return ((PegasusPacket)thisObj).IsLoaded();
+            }
+            else
+            {
+                // Returning false here would just introduce undefined behaviour
+                HookRegistry.Panic("Unknown typename!");
+            }
 
-		// Dumps the current packet onto the tee stream.
-		// The packet has to be reconstructed according to the rules found in the respective
-		// encoding(..) method.
-		private void DumpPacket(string typeName, object thisObj)
-		{
-			TeeStream tee = TeeStream.Get();
-			// Container for our dumped packet.
-			MemoryStream dataStream = new MemoryStream();
+            return false;
+        }
 
-			switch (typeName)
-			{
-				case "bgs.BattleNetPacket":
-					{
-						// Get data.
-						object header = TypeBattleNetPacket.GetMethod("GetHeader").Invoke(thisObj,
-										EMPTY_ARGS); // bnet.protocol.Header
-						object data = TypeBattleNetPacket.GetMethod("GetBody").Invoke(thisObj,
-									  EMPTY_ARGS); // byte[]
+        // Dumps the current packet onto the tee stream.
+        // The packet has to be reconstructed according to the rules found in the respective
+        // encoding(..) method.
+        private void DumpPacket(string typeName, object thisObj)
+        {
+            TeeStream tee = TeeStream.Get();
+            // Container for our dumped packet.
+            MemoryStream dataStream = new MemoryStream();
 
-						// Get sizes of packet parts.
-						uint headerSize = (uint)TypeBattleNetHeader.GetMethod("GetSerializedSize").Invoke(header,
-										  EMPTY_ARGS); // uint
-						int bodySize = ((byte[])data).Length;
+            Type packetType = thisObj.GetType();
 
-						// Write sizes to buffer.
-						int shiftedHeaderSize = ((int)headerSize >> 8);
-						dataStream.WriteByte((byte)(shiftedHeaderSize & 0xff));
-						dataStream.WriteByte((byte)(headerSize & 0xff));
+            if (packetType.Equals(typeof(BattleNetPacket)))
+            {
+                BattleNetPacket packet = ((BattleNetPacket)thisObj);
+                var header = packet.GetHeader();
+                var body = packet.GetBody();
 
-						// Write header to buffer.
-						TypeBattleNetHeader.GetMethod("Serialize", BindingFlags.Instance | BindingFlags.Public)
-						.Invoke(header, new object[] { dataStream });
+                uint headerSize = header.GetSerializedSize();
+                // Body is byte buffer because packet is incoming/serialised!
+                int bodySize = ((byte[])body).Length;
 
-						// Copy body to buffer.
-						dataStream.Write((byte[])data, 0, bodySize);
+                int shiftedHeaderSize = ((int)headerSize >> 8);
+                dataStream.WriteByte((byte)(shiftedHeaderSize & 0xff));
+                dataStream.WriteByte((byte)(headerSize & 0xff));
 
-						var packetData = dataStream.ToArray();
-						// Write data to tee stream.
-						tee.WriteBattlePacket(packetData, true);
-					}
-					break;
-				case "PegasusPacket":
-					{
-						// Get data.
-						object data = TypePegasusPacket.GetMethod("GetBody").Invoke(thisObj, EMPTY_ARGS); // byte[]
+                // Write header to buffer.
+                header.Serialize(dataStream);
 
-						var typeField = TypePegasusPacket.GetField("Type");
-						object type = typeField.GetValue(thisObj); // int
+                // Copy body to buffer.
+                dataStream.Write((byte[])body, 0, bodySize);
 
-						// Get size of body.
-						int bodySize = ((byte[])data).Length;
+                var packetData = dataStream.ToArray();
+                // Write data to tee stream.
+                tee.WriteBattlePacket(packetData, true);
+            }
+            else if (packetType.Equals(typeof(PegasusPacket)))
+            {
+                PegasusPacket packet = ((PegasusPacket)thisObj);
+                var body = packet.GetBody();
+                int type = packet.Type;
 
-						// Write sizes to buffer.
-						byte[] typeBytes = BitConverter.GetBytes((int)type); // 4 bytes
-						byte[] sizeBytes = BitConverter.GetBytes(bodySize); // 4 bytes
+                int bodySize = ((byte[])body).Length;
+                // Write sizes to buffer.
+                byte[] typeBytes = BitConverter.GetBytes(type); // 4 bytes
+                byte[] sizeBytes = BitConverter.GetBytes(bodySize); // 4 bytes
 
-						dataStream.Write(typeBytes, 0, 4);
-						dataStream.Write(sizeBytes, 0, 4);
+                dataStream.Write(typeBytes, 0, 4);
+                dataStream.Write(sizeBytes, 0, 4);
 
-						// Write body to the stream.
-						dataStream.Write((byte[])data, 0, bodySize);
+                // Write body to the stream.
+                dataStream.Write((byte[])body, 0, bodySize);
 
-						var packetData = dataStream.ToArray();
-						// Write to tee stream.
-						tee.WritePegasusPacket(packetData, true);
-					}
-					break;
-				default:
-					// Returning false here would just introduce undefined behaviour
-					HookRegistry.Panic("Unknown typename!");
-					break;
-			}
-		}
+                var packetData = dataStream.ToArray();
+                // Write to tee stream.
+                tee.WritePegasusPacket(packetData, true);
+            }
+            else
+            {
+                // Returning false here would just introduce undefined behaviour
+                HookRegistry.Panic("Unknown typename!");
+            }
+        }
 
 
-		object OnCall(string typeName, string methodName, object thisObj, object[] args)
-		{
+        object OnCall(string typeName, string methodName, object thisObj, object[] args)
+        {
 
-			if ((typeName != "bgs.BattleNetPacket" && typeName != "PegasusPacket") ||
-				methodName != "IsLoaded")
-			{
-				return null;
-			}
+            if ((typeName != "bgs.BattleNetPacket" && typeName != "PegasusPacket") ||
+                methodName != "IsLoaded")
+            {
+                return null;
+            }
 
-			if (reentrant == true)
-			{
-				return null;
-			}
+            if (reentrant == true)
+            {
+                return null;
+            }
 
-			// Setting this variable makes sure we don't end up in an infinite loop.
-			// Because the hooker calls the hooked method again to fetch the returned data.
-			reentrant = true;
+            // Setting this variable makes sure we don't end up in an infinite loop.
+            // Because the hooker calls the hooked method again to fetch the returned data.
+            reentrant = true;
 
-			// Call the real method
-			object isLoaded = ProxyIsLoaded(typeName, thisObj);
+            // Call the real method
+            object isLoaded = ProxyIsLoaded(typeName, thisObj);
 
-			if ((bool)isLoaded == true)
-			{
-				// If the packet is complete, we copy it to our own stream
-				DumpPacket(typeName, thisObj);
-			}
+            if ((bool)isLoaded == true)
+            {
+                // If the packet is complete, we copy it to our own stream
+                DumpPacket(typeName, thisObj);
+            }
 
-			// Reset state.
-			reentrant = false;
+            // Reset state.
+            reentrant = false;
 
-			return isLoaded;
-		}
-	}
+            return isLoaded;
+        }
+    }
 }
