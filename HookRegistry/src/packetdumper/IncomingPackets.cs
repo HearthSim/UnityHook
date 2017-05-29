@@ -7,6 +7,8 @@ namespace Hooks.PacketDumper
 	[RuntimeHook]
 	class IncomingPackets
 	{
+		private const string RECEIVED_PACKET_NOTIFY = "RECEIVED Packet type `{0}` - SID: {1} - MID: {2}";
+
 		object[] EMPTY_ARGS = { };
 
 		// This variable is used to control the interception of the hooked method.
@@ -61,11 +63,19 @@ namespace Hooks.PacketDumper
 
 			Type packetType = thisObj.GetType();
 
+			string packetTypeString = packetType.Name;
+			int methodID = -1;
+			int serviceID = -1;
+
 			if (packetType.Equals(typeof(BattleNetPacket)))
 			{
 				var packet = ((BattleNetPacket)thisObj);
 				bnet.protocol.Header header = packet.GetHeader();
 				var body = packet.GetBody();
+
+				// Debug information
+				methodID = (int)header.MethodId;
+				serviceID = (int)header.ServiceId;
 
 				uint headerSize = header.GetSerializedSize();
 				// Body is byte buffer because packet is incoming/serialised!
@@ -91,6 +101,9 @@ namespace Hooks.PacketDumper
 				var body = packet.GetBody();
 				int type = packet.Type;
 
+				// Debug information
+				serviceID = type;
+
 				int bodySize = ((byte[])body).Length;
 				// Write sizes to buffer.
 				byte[] typeBytes = BitConverter.GetBytes(type); // 4 bytes
@@ -111,6 +124,9 @@ namespace Hooks.PacketDumper
 				// Returning false here would just introduce undefined behaviour
 				HookRegistry.Panic("Unknown typename!");
 			}
+
+			var message = string.Format(RECEIVED_PACKET_NOTIFY, packetTypeString, serviceID, methodID);
+			HookRegistry.Get().Log(message);
 		}
 
 

@@ -6,7 +6,7 @@ namespace Hooks.PacketDumper
 	[RuntimeHook]
 	class OutgoingPackets
 	{
-		private const string SENT_PACKET_NOTIFY = "Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
+		private const string SENT_PACKET_NOTIFY = "SENT Packet type `{0}` - SID: {1} - MID: {2} - PayloadType `{3}`";
 
 		private static object[] EMPTY_ARGS = { };
 
