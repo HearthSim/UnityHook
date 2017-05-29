@@ -55,7 +55,12 @@ namespace GameKnowledgeBase
 			}
 		}
 
-		private HSKB(string installPath) : base(ConstructLibPath(installPath), _assemblyFileNames)
+		private HSKB(string libPath) : base(libPath, _assemblyFileNames)
+		{
+		}
+
+		private HSKB(string installPath, bool constructPath) : base(ConstructLibPath(installPath),
+																	_assemblyFileNames)
 		{
 		}
 
@@ -85,11 +90,25 @@ namespace GameKnowledgeBase
 			return (LIB_TYPE[])generalValues;
 		}
 
-		public static HSKB Get(string installPath = null)
+		// If there is no singleton object, it's constructed with the provided install path.
+		// The fame folder structure is appended internally.
+		public static HSKB Construct(string installPath)
 		{
 			if (_thisObject == null)
 			{
-				_thisObject = new HSKB(installPath);
+				_thisObject = new HSKB(installPath, true);
+			}
+
+			return _thisObject;
+		}
+
+		// If there is no singleton object, it's constructed with the provided library path.
+		// The libraryPath points to the folder which contains all game libraries.
+		public static HSKB Get(string libPath = null)
+		{
+			if (_thisObject == null)
+			{
+				_thisObject = new HSKB(libPath);
 			}
 
 			return _thisObject;

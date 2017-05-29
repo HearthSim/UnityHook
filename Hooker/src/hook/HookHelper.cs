@@ -139,16 +139,34 @@ namespace Hooker
 		// Loads the hookregistry library into our AppDomain and collect all hooking classes.
 		void FindNecessaryTypes()
 		{
-			var hr = Assembly.LoadFrom(_options.HooksRegistryFilePath);
-			Type hrType = hr.GetType("Hooks.HookRegistry", true);
-			// Initialise the Hookregistery class while defering initialisation of dynamic types.
-			// Dynamic loading of types write-locks the library files which need to be overwritten after the hooking process!
-			hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null,
-					new object[] { (object)false });
+			Assembly hrAssembly = null;
+
+			try
+			{
+				hrAssembly = Assembly.LoadFrom(_options.HooksRegistryFilePath);
+				Type hrType = hrAssembly.GetType("Hooks.HookRegistry", true);
+				// Initialise the Hookregistery class while defering initialisation of dynamic types.
+				// Dynamic loading of types write-locks the library files which need to be overwritten after the hooking process!
+				hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null,
+						new object[] { (object)false });
+			}
+			catch (Exception e)
+			{
+				if (e is TargetInvocationException)
+				{
+					var wrapException = new
+					FileNotFoundException("Hooksregistry or a dependancy was not found!", e.InnerException);
+					throw wrapException;
+				}
+				else
+				{
+					throw;
+				}
+			}
 
 			// Locate all Hook classes through the RuntimeHook attribute.
-			var runtimeHookAttr = hr.GetType("Hooks.RuntimeHookAttribute", true);
-			foreach (var type in hr.GetTypes())
+			var runtimeHookAttr = hrAssembly.GetType("Hooks.RuntimeHookAttribute", true);
+			foreach (var type in hrAssembly.GetTypes())
 			{
 				// Match each type against the attribute
 				var hooks = type.GetCustomAttributes(runtimeHookAttr, false);
@@ -180,9 +198,9 @@ namespace Hooker
 			ExpectedMethods = temp.ToArray();
 		}
 
-		void CopyHooksLibrary()
+		void CopyHooksLibrary(GameKB knowledgeBase)
 		{
-			var libTargetPath = Path.Combine(_options.GamePath,
+			var libTargetPath = Path.Combine(knowledgeBase.LibraryPath,
 											 Path.GetFileName(_options.HooksRegistryFilePath));
 			try
 			{
@@ -212,7 +230,7 @@ namespace Hooker
 			// Validate all command line options.
 			CheckOptions();
 			// Copy our injected library to the location of the 'to hook' assemblies.
-			CopyHooksLibrary();
+			CopyHooksLibrary(gameKnowledge);
 			//
 			FindNecessaryTypes();
 			// Find all expected method fullnames by HookRegistry.
