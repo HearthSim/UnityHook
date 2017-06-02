@@ -1,22 +1,23 @@
-﻿using bgs;
-using System;
-using System.IO;
+﻿// This hook introduces additional code to dump each RECEIVED packet.
+// The packet is caught from the communication stream between client and server.
 
-namespace Hooks.PacketDumper
+using bgs;
+using HackstoneAnalyzer.PayloadFormat;
+using System;
+using Hooks.PacketDumper;
+
+namespace Hooks
 {
 	[RuntimeHook]
 	class IncomingPackets
 	{
 		private const string RECEIVED_PACKET_NOTIFY = "RECEIVED Packet type `{0}` - SID: {1} - MID: {2}";
 
-		object[] EMPTY_ARGS = { };
-
 		// This variable is used to control the interception of the hooked method.
 		// When TRUE, we return null to allow normal execution of the function.
 		// When FALSE, we hook into the call.
 		// This switch allows us to call the original method from within this hook class.
 		private bool reentrant;
-
 
 		public IncomingPackets()
 		{
@@ -57,78 +58,49 @@ namespace Hooks.PacketDumper
 		// encoding(..) method.
 		private void DumpPacket(string typeName, object thisObj)
 		{
-			var tee = TeeStream.Get();
-			// Container for our dumped packet.
-			var dataStream = new MemoryStream();
+			// Object that does the duplication of packets.
+			var dumper = DumpServer.Get();
 
+			// the name of the packet is retrievable in generalized form.
 			Type packetType = thisObj.GetType();
-
+			// More packet specific details.
 			string packetTypeString = packetType.Name;
 			int methodID = -1;
 			int serviceID = -1;
 
+			HookRegistry.Get().Log("Incoming Dump MARK 1");
+
 			if (packetType.Equals(typeof(BattleNetPacket)))
 			{
 				var packet = ((BattleNetPacket)thisObj);
-				bnet.protocol.Header header = packet.GetHeader();
-				var body = packet.GetBody();
 
 				// Debug information
+				bnet.protocol.Header header = packet.GetHeader();
 				methodID = (int)header.MethodId;
 				serviceID = (int)header.ServiceId;
 
-				uint headerSize = header.GetSerializedSize();
-				// Body is byte buffer because packet is incoming/serialised!
-				int bodySize = ((byte[])body).Length;
-
-				int shiftedHeaderSize = ((int)headerSize >> 8);
-				dataStream.WriteByte((byte)(shiftedHeaderSize & 0xff));
-				dataStream.WriteByte((byte)(headerSize & 0xff));
-
-				// Write header to buffer.
-				header.Serialize(dataStream);
-
-				// Copy body to buffer.
-				dataStream.Write((byte[])body, 0, bodySize);
-
-				byte[] packetData = dataStream.ToArray();
-				// Write data to tee stream.
-				tee.WriteBattlePacket(packetData, true);
+				byte[] packetData = Serializer.SerializePacket(packet);
+				dumper.SendPacket(PacketType.Battlenetpacket, PacketDirection.Incoming, 0, packetData);
 			}
 			else if (packetType.Equals(typeof(PegasusPacket)))
 			{
 				var packet = ((PegasusPacket)thisObj);
-				var body = packet.GetBody();
-				int type = packet.Type;
 
 				// Debug information
-				serviceID = type;
+				serviceID = packet.Type;
 
-				int bodySize = ((byte[])body).Length;
-				// Write sizes to buffer.
-				byte[] typeBytes = BitConverter.GetBytes(type); // 4 bytes
-				byte[] sizeBytes = BitConverter.GetBytes(bodySize); // 4 bytes
-
-				dataStream.Write(typeBytes, 0, 4);
-				dataStream.Write(sizeBytes, 0, 4);
-
-				// Write body to the stream.
-				dataStream.Write((byte[])body, 0, bodySize);
-
-				var packetData = dataStream.ToArray();
-				// Write to tee stream.
-				tee.WritePegasusPacket(packetData, true);
+				byte[] packetData = Serializer.SerializePacket(packet);
+				dumper.SendPacket(PacketType.Pegasuspacket, PacketDirection.Incoming, 0, packetData);
 			}
 			else
 			{
 				// Returning false here would just introduce undefined behaviour
-				HookRegistry.Panic("Unknown typename!");
+				HookRegistry.Panic("Unknown packet type!");
 			}
 
-			var message = string.Format(RECEIVED_PACKET_NOTIFY, packetTypeString, serviceID, methodID);
+			string message = string.Format(RECEIVED_PACKET_NOTIFY, packetTypeString, serviceID, methodID);
 			HookRegistry.Get().Log(message);
 		}
-
 
 		object OnCall(string typeName, string methodName, object thisObj, object[] args)
 		{
@@ -145,10 +117,10 @@ namespace Hooks.PacketDumper
 			}
 
 			// Setting this variable makes sure we don't end up in an infinite loop.
-			// Because the hooker calls the hooked method again to fetch the returned data.
+			// Because the we call the hooked method again to fetch the actual data.
 			reentrant = true;
 
-			// Call the real method
+			// Call the method again in reentrant mode.
 			object isLoaded = ProxyIsLoaded(typeName, thisObj);
 
 			if ((bool)isLoaded == true)

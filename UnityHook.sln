@@ -4,11 +4,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 15.0.26430.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hooker", "Hooker\Hooker.csproj", "{33A0B54A-F06A-4C79-98F7-D87AEDFD5C2B}"
-	ProjectSection(ProjectDependencies) = postProject
-		{2182CF16-EAFC-45FA-B4FB-274D05EB027E} = {2182CF16-EAFC-45FA-B4FB-274D05EB027E}
-	EndProjectSection
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookRegistry", "HookRegistry\HookRegistry.csproj", "{2182CF16-EAFC-45FA-B4FB-274D05EB027E}"
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "GameKnowledgeBase", "GameKnowledgeBase\GameKnowledgeBase.shproj", "{2AFECE69-88C0-4EBC-B06B-241F32D9AFB7}"
 EndProject
@@ -16,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookRegistry", "HookRegistry\HookRegistry.csproj", "{46B325BA-78B3-4B5D-ABFB-9E78C2732F6C}"
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
@@ -31,10 +28,10 @@ Global
 		{33A0B54A-F06A-4C79-98F7-D87AEDFD5C2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{33A0B54A-F06A-4C79-98F7-D87AEDFD5C2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{33A0B54A-F06A-4C79-98F7-D87AEDFD5C2B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{2182CF16-EAFC-45FA-B4FB-274D05EB027E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2182CF16-EAFC-45FA-B4FB-274D05EB027E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2182CF16-EAFC-45FA-B4FB-274D05EB027E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2182CF16-EAFC-45FA-B4FB-274D05EB027E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46B325BA-78B3-4B5D-ABFB-9E78C2732F6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46B325BA-78B3-4B5D-ABFB-9E78C2732F6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46B325BA-78B3-4B5D-ABFB-9E78C2732F6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46B325BA-78B3-4B5D-ABFB-9E78C2732F6C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

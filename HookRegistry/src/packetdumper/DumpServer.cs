@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HackstoneAnalyzer.PayloadFormat;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -6,16 +7,11 @@ using System.Net;
 using System.Net.Sockets;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using HackstoneAnalyzer.PayloadFormat;
 
-namespace Hooks.src.packetdumper
+namespace Hooks.PacketDumper
 {
 	class DumpServer
 	{
-		// Magic header for our handshake packet.
-		// This value indicates that the stream contains packet data.
-		private const long MAGIC_V = 0x2E485344554D502E;
-
 		// Analyzers can connect to this port to receive a stream of packet data.
 		private const int ANALYZER_LISTENER_PORT = 6666;
 
@@ -24,8 +20,6 @@ namespace Hooks.src.packetdumper
 
 		private TcpListener _connectionListener;
 		private List<Socket> _connections;
-		// Keeps track of how many bytes of the replay buffer were sent to the analyzers.
-		private Map<Socket, int> _sentBytes;
 
 		// First payload sent to the listening analyzers.
 		private byte[] _handshakePayload;
@@ -40,7 +34,7 @@ namespace Hooks.src.packetdumper
 			_timeWatch.Start();
 
 			_connectionListener = new TcpListener(IPAddress.Loopback, ANALYZER_LISTENER_PORT);
-			_sentBytes = new Map<Socket, int>();
+			_connections = new List<Socket>();
 
 			_replayBuffer = new MemoryStream();
 			_bufferLock = new object();
@@ -60,13 +54,13 @@ namespace Hooks.src.packetdumper
 
 		// Constructs the handshake payload.
 		// After the handshake payload has been set, analyzers will be accepted.
-		public void InitialiseHandshake(int hsVersion)
+		public void InitialiseHandshake(string hsVersion)
 		{
 			if (_handshakePayload == null)
 			{
 				var handshake = new Handshake()
 				{
-					Magic = MAGIC_V,
+					Magic = Util.MAGIC_V,
 					// HSVersion is unknown at this point.
 					HsVersion = hsVersion
 				};
@@ -163,28 +157,30 @@ namespace Hooks.src.packetdumper
 		// Store packet to be sent to all attached analyzers.
 		// Packets are only sent IF the InitialiseHandshake(..) has been called.
 		// It's allowed to 'send' packets before the handshake is initialised.
-		public void SendPacket(PacketType type, PacketDirection direction, int bodyTypeHash, ByteString data)
+		public void SendPacket(PacketType type, PacketDirection direction, uint bodyTypeHash, byte[] data)
 		{
 			// Construct new payload to send.
 			var packet = new CapturedPacket()
 			{
 				Type = type,
 				Direction = direction,
-				DataLength = data.Length,
-				Data = data,
+				Data = ByteString.CopyFrom(data, 0, data.Length),
 				BodyTypeHash = bodyTypeHash,
 				PassedSeconds = Duration.FromTimeSpan(_timeWatch.Elapsed)
 			};
 			byte[] packetBytes = packet.ToByteArray();
 
+
+			Socket[] connectionsCopy;
 			lock (_bufferLock)
 			{
 				// Append data to the replay buffer.
 				_replayBuffer.Write(packetBytes, 0, packetBytes.Length);
+				// Race conditions occur when a copy isn't made.
+				connectionsCopy = _connections.ToArray();
 			}
 
 			// Trigger a send of new data on all analyzer connections.
-			Socket[] connectionsCopy = _connections.ToArray();
 			foreach (Socket connection in connectionsCopy)
 			{
 				connection.BeginSend(packetBytes, 0, packetBytes.Length, SocketFlags.None, FinishSocketSend, connection);

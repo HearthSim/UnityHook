@@ -1,13 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{2182CF16-EAFC-45FA-B4FB-274D05EB027E}</ProjectGuid>
+    <ProjectGuid>{46B325BA-78B3-4B5D-ABFB-9E78C2732F6C}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Hooks</RootNamespace>
+    <RootNamespace>HookRegistry</RootNamespace>
     <AssemblyName>HookRegistry</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -21,7 +21,6 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <NoStdLib>false</NoStdLib>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -30,16 +29,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <NoStdLib>false</NoStdLib>
   </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="src\HookRegistry.cs" />
-    <Compile Include="src\packetdumper\DumpServer.cs" />
-    <Compile Include="src\packetdumper\OutgoingPackets.cs" />
-    <Compile Include="src\packetdumper\IncomingPackets.cs" />
-    <Compile Include="src\packetdumper\TeeStream.cs" />
-    <Compile Include="src\SSLDisable.cs" />
-  </ItemGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp">
       <HintPath>..\hs_link\Hearthstone_Data\Managed\Assembly-CSharp.dll</HintPath>
@@ -47,20 +37,30 @@
     <Reference Include="Assembly-CSharp-firstpass">
       <HintPath>..\hs_link\Hearthstone_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
     </Reference>
-    <Reference Include="PayloadFormats">
-      <HintPath>..\..\Hearthstone-Packet-Dumps\HackstoneAnalyzer\PayloadFormats\bin\Debug\PayloadFormats.dll</HintPath>
+    <Reference Include="Google.Protobuf">
+      <HintPath>..\lib\PayloadFormat\Debug\net35\Google.Protobuf.dll</HintPath>
+    </Reference>
+    <Reference Include="PayloadFormat">
+      <HintPath>..\lib\PayloadFormat\Debug\net35\PayloadFormat.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Data" />
     <Reference Include="UnityEngine">
       <HintPath>..\hs_link\Hearthstone_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="src\HookRegistry.cs" />
+    <Compile Include="src\IncomingPackets.cs" />
+    <Compile Include="src\OutgoingPackets.cs" />
+    <Compile Include="src\packetdumper\DumpServer.cs" />
+    <Compile Include="src\packetdumper\Serializer.cs" />
+    <Compile Include="src\SSLDisable.cs" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
 </Project>
