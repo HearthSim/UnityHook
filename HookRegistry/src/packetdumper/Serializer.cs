@@ -15,7 +15,6 @@ namespace Hooks.PacketDumper
 			var bodyProto = body as IProtoBuf;
 			if (bodyProto != null)
 			{
-				HookRegistry.Get().Log("Serializer PEG IPROTO");
 				// There is an encode routine defined for a body which is a protobuffer
 				// instance.
 				return packet.Encode();
@@ -27,10 +26,9 @@ namespace Hooks.PacketDumper
 			if (bodyBuffer == null)
 			{
 				string message = string.Format("Body of this packet (`{0}`) is not a byte buffer!", body.GetType().Name);
-				HookRegistry.Get().Log(message);
+				HookRegistry.Panic(message);
 			}
 
-			HookRegistry.Get().Log("Serializer PEG Byte[]");
 			var dataStream = new MemoryStream();
 			int bodySize = bodyBuffer.Length;
 			// Write sizes to buffer.
@@ -54,7 +52,6 @@ namespace Hooks.PacketDumper
 			var bodyProto = body as IProtoBuf;
 			if (bodyProto != null)
 			{
-				HookRegistry.Get().Log("Serializer BNET IPROTO");
 				// There is an encode routine defined for a body which is a protobuffer
 				// instance.
 				return packet.Encode();
@@ -66,10 +63,9 @@ namespace Hooks.PacketDumper
 			if (bodyBuffer == null)
 			{
 				string message = string.Format("Body of this packet (`{0}`) is not a byte buffer!", body.GetType().Name);
-				HookRegistry.Get().Log(message);
+				HookRegistry.Panic(message);
 			}
 
-			HookRegistry.Get().Log("Serializer BNET Byte[]");
 			var dataStream = new MemoryStream();
 			uint headerSize = header.GetSerializedSize();
 			int shiftedHeaderSize = ((int)headerSize >> 8);
