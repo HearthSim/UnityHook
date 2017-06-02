@@ -40,7 +40,7 @@ namespace Hooker
 					// Restore the original file.
 					try
 					{
-						File.Copy(backupLibPath, gameLibFilePath);
+						File.Copy(backupLibPath, gameLibFilePath, true);
 						Program.Log.Info(FILE_RESTORED, backupLibPath);
 					}
 					catch (Exception e)

@@ -48,6 +48,8 @@ namespace GameKnowledgeBase
 
 			_installpath = Path.GetFullPath(installPath);
 			_gameKnowledge = gameKnowledge ?? throw new ArgumentNullException("GameKnowledge parameter cannot be null!");
+
+			ConstructLibraryPaths();
 		}
 
 		public static GameKB CreateFromLibraryPath(IKnowledge gameKnowledge, string libPath)

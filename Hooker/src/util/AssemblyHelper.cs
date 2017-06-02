@@ -25,7 +25,7 @@ namespace Hooker.util
 		{
 			// Construct a resolver that finds other assemblies linked by the one we try to load.
 			// Unless specified, the directory containing the assembly file (to load) will be added as resolvepath.
-			var fileDir = (resolvePath != null) ? resolvePath : Path.GetDirectoryName(filePath);
+			string fileDir = resolvePath ?? Path.GetDirectoryName(filePath);
 			var resolver = new DefaultAssemblyResolver();
 			resolver.AddSearchDirectory(fileDir);
 			// The resolver gets passed in a set of parameters

@@ -199,7 +199,7 @@ namespace Hooker
 
 		void CopyHooksLibrary(GameKB knowledgeBase)
 		{
-			var libTargetPath = Path.Combine(knowledgeBase.InstallPath,
+			var libTargetPath = Path.Combine(knowledgeBase.LibraryPath,
 											 Path.GetFileName(_options.HooksRegistryFilePath));
 			try
 			{
@@ -242,12 +242,14 @@ namespace Hooker
 			// The blueprints will be edited, saved and eventually replaces the original assembly.
 			foreach (string libraryFilePath in gameKnowledge.LibraryFilePaths)
 			{
+				if (!File.Exists(libraryFilePath)) continue;
+
 				var libBackupPath = AssemblyHelper.GetPathBackup(libraryFilePath);
 				var libPatchedPath = AssemblyHelper.GetPathOut(libraryFilePath);
 
 				// Load the assembly file
 				AssemblyDefinition assembly = AssemblyHelper.LoadAssembly(libraryFilePath,
-																		  gameKnowledge.InstallPath);
+																		  gameKnowledge.LibraryPath);
 				if (assembly.HasPatchMark())
 				{
 					Program.Log.Warn(ASSEMBLY_ALREADY_PATCHED, libraryFilePath);
