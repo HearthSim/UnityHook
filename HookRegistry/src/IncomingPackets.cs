@@ -68,8 +68,6 @@ namespace Hooks
 			int methodID = -1;
 			int serviceID = -1;
 
-			HookRegistry.Get().Log("Incoming Dump MARK 1");
-
 			if (packetType.Equals(typeof(BattleNetPacket)))
 			{
 				var packet = ((BattleNetPacket)thisObj);

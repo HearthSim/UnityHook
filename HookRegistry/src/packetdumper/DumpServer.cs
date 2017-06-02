@@ -58,6 +58,7 @@ namespace Hooks.PacketDumper
 		{
 			if (_handshakePayload == null)
 			{
+				HookRegistry.Get().Log("DumpServer - Initialising handshake");
 				var handshake = new Handshake()
 				{
 					Magic = Util.MAGIC_V,
@@ -65,7 +66,11 @@ namespace Hooks.PacketDumper
 					HsVersion = hsVersion
 				};
 
-				_handshakePayload = handshake.ToByteArray();
+				// Write payload with prefixed length to the buffer.
+				// Prefixing with length is important since the protobuf doesn't delimit itself!
+				MemoryStream tempBuffer = new MemoryStream();
+				handshake.WriteDelimitedTo(tempBuffer);
+				_handshakePayload = tempBuffer.ToArray();
 
 				InitialiseStream();
 			}
@@ -74,6 +79,7 @@ namespace Hooks.PacketDumper
 		// Start accepting analyzer connections.
 		private void InitialiseStream()
 		{
+			_connectionListener.Start();
 			_connectionListener.BeginAcceptSocket(AcceptAnalyzer, null);
 		}
 
@@ -81,14 +87,23 @@ namespace Hooks.PacketDumper
 		{
 			// Fetch socket to new client.
 			// This blocks if no new analyzer has tried to connect.
+			Socket client = null;
 			try
 			{
-				Socket client = _connectionListener.EndAcceptSocket(result);
+				client = _connectionListener.EndAcceptSocket(result);
 
 				// Set state of socket as write_only.
 				// This will trigger an error on the analyzers IF they try to send data.
 				client.Shutdown(SocketShutdown.Receive);
+			}
+			catch (Exception e)
+			{
+				string message = string.Format("Connecting analyzer failed for following reason: {0}", e.Message);
+				HookRegistry.Get().Log(message);
+			}
 
+			if (client != null)
+			{
 				/*
 				 * BeginSend will copy the provided data into the send buffer.
 				 * After this copy, the callback will be invoked on a separate thread.
@@ -99,22 +114,28 @@ namespace Hooks.PacketDumper
 				 * resources really quickly!
 				 */
 
-				lock (_bufferLock)
+				try
 				{
-					// Send handshake payload.
-					client.BeginSend(_handshakePayload, 0, _handshakePayload.Length, SocketFlags.None, FinishSocketSend, client);
+					lock (_bufferLock)
+					{
+						// Send handshake payload.
+						client.BeginSend(_handshakePayload, 0, _handshakePayload.Length, SocketFlags.None, FinishSocketSend, client);
 
-					// Follow up with all buffered packets.
-					byte[] packetBacklog = _replayBuffer.GetBuffer();
-					client.BeginSend(packetBacklog, 0, packetBacklog.Length, SocketFlags.None, FinishSocketSend, client);
+						// Follow up with all buffered packets.
+						// ToArray omits non used buffer space. Don't use ToBuffer()!
+						byte[] packetBacklog = _replayBuffer.ToArray();
+						client.BeginSend(packetBacklog, 0, packetBacklog.Length, SocketFlags.None, FinishSocketSend, client);
 
-					// Store the client so it's possible to send new data after the backlog.
-					_connections.Add(client);
+						// Store the client so it's possible to send new data after the backlog.
+						// We suppose sending data to the connected analyzer won't fail.
+						_connections.Add(client);
+					}
 				}
-			}
-			catch (Exception)
-			{
-				// Do nothing, failed to attach analyzer.
+				catch (Exception e)
+				{
+					string message = string.Format("Sending BACKLOG to newly attached analyzer failed for following reason: {0}", e.Message);
+					HookRegistry.Get().Log(message);
+				}
 			}
 
 			// Accept the next analyzer.
@@ -130,8 +151,10 @@ namespace Hooks.PacketDumper
 			{
 				client.EndSend(result);
 			}
-			catch (Exception)
+			catch (Exception e)
 			{
+				string message = string.Format("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
+				HookRegistry.Get().Log(message);
 				CleanSocket(client);
 			}
 		}
@@ -168,7 +191,11 @@ namespace Hooks.PacketDumper
 				BodyTypeHash = bodyTypeHash,
 				PassedSeconds = Duration.FromTimeSpan(_timeWatch.Elapsed)
 			};
-			byte[] packetBytes = packet.ToByteArray();
+
+			// Write length delimited payload.
+			var tempBuffer = new MemoryStream();
+			packet.WriteDelimitedTo(tempBuffer);
+			byte[] packetBytes = tempBuffer.ToArray();
 
 
 			Socket[] connectionsCopy;
@@ -183,7 +210,16 @@ namespace Hooks.PacketDumper
 			// Trigger a send of new data on all analyzer connections.
 			foreach (Socket connection in connectionsCopy)
 			{
-				connection.BeginSend(packetBytes, 0, packetBytes.Length, SocketFlags.None, FinishSocketSend, connection);
+				try
+				{
+					connection.BeginSend(packetBytes, 0, packetBytes.Length, SocketFlags.None, FinishSocketSend, connection);
+				}
+				catch (Exception e)
+				{
+					string message = string.Format("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
+					HookRegistry.Get().Log(message);
+					CleanSocket(connection);
+				}
 			}
 		}
 	}

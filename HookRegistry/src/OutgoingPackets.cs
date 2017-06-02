@@ -5,6 +5,7 @@ using bgs;
 using HackstoneAnalyzer.PayloadFormat;
 using System;
 using Hooks.PacketDumper;
+using bnet.protocol.authentication;
 
 namespace Hooks
 {
@@ -54,8 +55,6 @@ namespace Hooks
 			int serviceID = -1;
 			object body = null;
 
-			HookRegistry.Get().Log("Outgoing Dump MARK 1");
-
 			if (packetType.Equals(typeof(BattleNetPacket)))
 			{
 				var packet = ((BattleNetPacket)packetObj);
@@ -70,7 +69,14 @@ namespace Hooks
 				uint bodyHash = Util.GenerateTypeHash(body);
 
 				byte[] packetData = Serializer.SerializePacket(packet);
-				dumper.SendPacket(PacketType.Battlenetpacket, PacketDirection.Incoming, bodyHash, packetData);
+				dumper.SendPacket(PacketType.Battlenetpacket, PacketDirection.Outgoing, bodyHash, packetData);
+
+				// Test for LogonRequest body packet, since that one contains the version string
+				var logonRequest = body as LogonRequest;
+				if(logonRequest != null)
+				{
+					dumper.InitialiseHandshake(logonRequest.Version);
+				}
 			}
 			else if (packetType.Equals(typeof(PegasusPacket)))
 			{
@@ -84,7 +90,7 @@ namespace Hooks
 				uint bodyHash = Util.GenerateTypeHash(body);
 
 				byte[] packetData = Serializer.SerializePacket(packet);
-				dumper.SendPacket(PacketType.Pegasuspacket, PacketDirection.Incoming, bodyHash, packetData);
+				dumper.SendPacket(PacketType.Pegasuspacket, PacketDirection.Outgoing, bodyHash, packetData);
 			}
 			else
 			{
