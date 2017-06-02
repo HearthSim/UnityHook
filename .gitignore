@@ -55,10 +55,6 @@ ipch/
 *.vsp
 *.vspx
 
-# unredistributable binaries:
-lib/UnityEngine.dll
-lib/Assembly-CSharp.dll
-lib/Assembly-CSharp-firstpass.dll
-lib/System.dll
 packages/
 hs_link/
+
