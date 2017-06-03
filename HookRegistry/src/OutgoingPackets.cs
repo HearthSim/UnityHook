@@ -66,7 +66,7 @@ namespace Hooks
 				body = packet.GetBody();
 
 				// Calculate the hash of the body, which is passed to analyzers.
-				uint bodyHash = Util.GenerateTypeHash(body);
+				uint bodyHash = Util.GenerateHashFromObjectType(body);
 
 				byte[] packetData = Serializer.SerializePacket(packet);
 				dumper.SendPacket(PacketType.Battlenetpacket, PacketDirection.Outgoing, bodyHash, packetData);
@@ -87,7 +87,7 @@ namespace Hooks
 				body = packet.GetBody();
 
 				// Calculate the hash of the body, which is passed to analyzers.
-				uint bodyHash = Util.GenerateTypeHash(body);
+				uint bodyHash = Util.GenerateHashFromObjectType(body);
 
 				byte[] packetData = Serializer.SerializePacket(packet);
 				dumper.SendPacket(PacketType.Pegasuspacket, PacketDirection.Outgoing, bodyHash, packetData);
