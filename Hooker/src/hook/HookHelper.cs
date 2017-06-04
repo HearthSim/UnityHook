@@ -51,15 +51,12 @@ namespace Hooker
 			get;
 		}
 
-		// All hook class types from HookRegistry
-		private List<Type> HookTypes;
 		// Array of all methods that match hook classes from HookRegistry
 		private string[] ExpectedMethods;
 
 		public HookHelper(HookSubOptions options)
 		{
 			_options = options;
-			HookTypes = new List<Type>();
 		}
 
 		List<HOOK_ENTRY> ReadHooksFile(string hooksFilePath)
@@ -123,78 +120,44 @@ namespace Hooker
 
 			// Save the definition of the assembly containing our HOOKS.
 			var hooksAssembly = AssemblyDefinition.ReadAssembly(_options.HooksRegistryFilePath);
-			_options.HooksRegistryAssembly = hooksAssembly;
+			_options.HooksRegistryAssemblyBlueprint = hooksAssembly;
 			// Check if the Hooks.HookRegistry type is present, this is the entrypoint for all
 			// hooked methods.
 			ModuleDefinition assModule = hooksAssembly.MainModule;
 			TypeDefinition hRegType = assModule.Types.FirstOrDefault(t => t.FullName.Equals("Hooks.HookRegistry"));
 			// Store the HooksRegistry type reference.
-			_options.HookRegistryType = hRegType;
+			_options.HookRegistryTypeBlueprint = hRegType;
 			if (hRegType == null)
 			{
 				throw new InvalidDataException("The HooksRegistry library does not contain `Hooks.HookRegistry`!");
 			}
 		}
 
-		// Loads the hookregistry library into our AppDomain and collect all hooking classes.
-		void FindHooks()
+		void ProcessHookRegistry()
 		{
-			Assembly hrAssembly = null;
+			// We load the HookRegistry dll in a seperate app domain, which allows for dynamic unloading
+			// when needed.
+			// HookRegistry COULD lock referenced DLL's which we want to overwrite, so unloading releases
+			// the locks HookRegistry held.
+
+			
+			// Isolated domain where the library will be loaded into.
+			var hookRegistryDomain = AppDomain.CreateDomain("HookRegistryDomain");
 
 			try
 			{
-				hrAssembly = Assembly.LoadFrom(_options.HooksRegistryFilePath);
-				Type hrType = hrAssembly.GetType("Hooks.HookRegistry", true);
-				// Initialise the Hookregistery class while defering initialisation of dynamic types.
-				// Dynamic loading of types write-locks the library files which need to be overwritten after the hooking process!
-				hrType.GetMethod("Get", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { });
-			}
-			catch (Exception e)
-			{
-				if (e is TargetInvocationException)
-				{
-					var wrapException = new
-					FileNotFoundException("Hooksregistry or a dependancy was not found!", e.InnerException);
-					throw wrapException;
-				}
-				else
-				{
-					throw;
-				}
-			}
+				// Create an instance of our own assembly in a new appdomain.
+				object instance = hookRegistryDomain
+					.CreateInstanceAndUnwrap(Assembly.GetExecutingAssembly().FullName,"Hooker.HookRegistryTester");
 
-			// Locate all Hook classes through the RuntimeHook attribute.
-			Type runtimeHookAttr = hrAssembly.GetType("Hooks.RuntimeHookAttribute", true);
-			foreach (Type type in hrAssembly.GetTypes())
-			{
-				// Match each type against the attribute
-				object[] hooks = type.GetCustomAttributes(runtimeHookAttr, false);
-				if (hooks != null && hooks.Length > 0)
-				{
-					// The types that match are Hook classes
-					HookTypes.Add(type);
-				}
+				// All methods executed here are actually executed in the hookregistry domain!
+				var hrTester = (HookRegistryTester)instance;			
+				ExpectedMethods = hrTester.FetchExpectedMethods(_options.HooksRegistryFilePath);						
 			}
-		}
-
-		// Calls GetExpectedMethods from each hooking class contained in HookRegistry.
-		// The purpose is to track all methods which are expected by all loaded hooks.
-		// Cross referencing this list with all 'to-hook' methods allows us to display
-		// a warning for potentially unexpected behaviour.
-		void FetchExpectedMethods()
-		{
-			List<string> temp = new List<string>();
-			foreach (Type hook in HookTypes)
+			finally
 			{
-				MethodInfo method = hook.GetMethod("GetExpectedMethods");
-				if (method != null)
-				{
-					var methods = method.Invoke(null, new object[] { });
-					temp.AddRange((string[])methods);
-				}
+				AppDomain.Unload(hookRegistryDomain);
 			}
-
-			ExpectedMethods = temp.ToArray();
 		}
 
 		void CopyHooksLibrary(GameKB knowledgeBase)
@@ -211,11 +174,13 @@ namespace Hooker
 				// additional dependancies, they will need to be copied manually to the library
 				// directory!
 
+				Program.Log.Info("HooksRegistry binary copied to `{0}`", libTargetPath);
+
 				// Update registry file path to be around the targetted libraries.
 				_options.HooksRegistryFilePath = libTargetPath;
 
 				// And reload assembly definition
-				_options.HooksRegistryAssembly = AssemblyDefinition.ReadAssembly(
+				_options.HooksRegistryAssemblyBlueprint = AssemblyDefinition.ReadAssembly(
 													 _options.HooksRegistryFilePath);
 			}
 			catch (Exception)
@@ -230,10 +195,8 @@ namespace Hooker
 			CheckOptions();
 			// Copy our injected library to the location of the 'to hook' assemblies.
 			CopyHooksLibrary(gameKnowledge);
-			// Locate all hook classes, because they notify us of expected methods.
-			FindHooks();
-			// Find all expected method fullnames by HookRegistry.
-			FetchExpectedMethods();
+			// Test HookRegistry library.
+			ProcessHookRegistry();
 
 			List<HOOK_ENTRY> hookEntries = ReadHooksFile(_options.HooksFilePath);
 
@@ -311,11 +274,11 @@ namespace Hooker
 					// The file could be locked! Notify user.
 					// .. or certain libraries could not be resolved..
 					// Try to find the path throwing an exception.. but this method is not foolproof!
-					var path = typeof(IOException).GetField("_maybeFullPath",
+					object path = typeof(IOException).GetField("_maybeFullPath",
 															BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase)?.GetValue(e);
-					Program.Log.Exception(ERR_WRITE_FILE, null, e?.ToString());
+					Program.Log.Warn(ERR_WRITE_FILE, path);
 
-					throw;
+					throw e;
 				}
 			}
 		}

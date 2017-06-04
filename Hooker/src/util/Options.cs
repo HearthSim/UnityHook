@@ -84,8 +84,8 @@ namespace Hooker
 			set;
 		}
 
-		// Assembly blueprint of the HooksRegistry assembly
-		public AssemblyDefinition HooksRegistryAssembly
+		// Assembly blueprint of the HooksRegistry assembly.
+		public AssemblyDefinition HooksRegistryAssemblyBlueprint
 		{
 			get;
 			set;
@@ -93,7 +93,7 @@ namespace Hooker
 
 		// Type where all hooks are registered. This is also the type that gets called by
 		// the hooking code and delegates to the hooked methods
-		public TypeDefinition HookRegistryType
+		public TypeDefinition HookRegistryTypeBlueprint
 		{
 			get;
 			set;

@@ -54,6 +54,7 @@
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\hook\HookRegistryTester.cs" />
     <Compile Include="src\util\AssemblyHelper.cs" />
     <Compile Include="src\hook\Hooker.cs" />
     <Compile Include="src\hook\HookHelper.cs" />
