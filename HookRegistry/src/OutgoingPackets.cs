@@ -23,6 +23,7 @@ namespace Hooks
 		public OutgoingPackets()
 		{
 			HookRegistry.Register(OnCall);
+			RegisterGenericDeclaringTypes();
 			reentrant = false;
 		}
 

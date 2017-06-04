@@ -4,6 +4,7 @@ using Mono.Cecil.Rocks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Mono.Collections.Generic;
 
 namespace Hooker
 {
@@ -38,7 +39,7 @@ namespace Hooker
 			*/
 
 			// Fetch types and references
-			TypeDefinition _hookRegistryType = options.HookRegistryType;
+			TypeDefinition _hookRegistryType = options.HookRegistryTypeBlueprint;
 			// Look for the HookRegistry.onCall(..) method
 			MethodDefinition onCallMethod = _hookRegistryType.Methods.First(mi => mi.Name.Equals("OnCall"));
 			MethodReference onCallMethodRef = module.Import(onCallMethod);
@@ -100,7 +101,7 @@ namespace Hooker
 						if (e is InvalidProgramException || e is InvalidOperationException)
 						{
 							// Report the problem to user directly ignoring the exception
-							Program.Log.Warn(HOOK_PROBLEM, method.FullName, e.Message);
+							Program.Log.Exception(HOOK_PROBLEM, e, method.FullName, e.Message);
 							continue;
 						}
 
@@ -120,17 +121,41 @@ namespace Hooker
 
 		public void AddHook(MethodDefinition method)
 		{
+			// Keep track of all generic parameters.
+			var genericParams = new Collection<GenericParameter>();
+
 			if (!method.HasBody)
 			{
 				// Escalate issue to parent
 				throw new InvalidProgramException("The selected method does not have a body!");
 			}
+
+			/*
+			 * Generic methods are a special case.
+			 * When generic ARGUMENTS are used to construct runtimehandles (typeof variants) the information
+			 * about the declaring type is lost -> original code with generic PARAMETERS.
+			 * 
+			 * Each hook method in the HookRegistry library must register the declaring class type of the generic
+			 * method it hooks. If this is not done, the HookRegistry will panic() when the hooked method cannot 
+			 * be resolved at runtime, leading to crashes (on purpose).
+			 * See (HOOKREGISTRY)\\Hooks.OutgoingPackets.RegisterGenericDeclaringTypes() for an
+			 * example.
+			 */
+			// Method itself might be generic!
 			if (method.HasGenericParameters)
 			{
-				// TODO: check if this hook procedure works with generics as-is.
-				// Hooking generic classes DOES work.
-				throw new InvalidOperationException("Generic parameters not supported");
+				Program.Log.Warn("The method `{0}` has generic parameters!", method.Name);
+				// throw new InvalidOperationException("Generic parameters on method not supported");
 			}
+			// Declaring class is generic!
+			if (method.DeclaringType.HasGenericParameters)
+			{
+				Program.Log.Warn("The declaring class of method `{0}` has generic parameters!", method.Name);
+				// throw new InvalidOperationException("Generic parameters on class not supported");
+			}
+
+			// Construct method from generic arguments
+			
 
 			// The following occurs in the body of the selected method              !important
 			// The method body is a set of instructions executed by the runtime.
@@ -163,7 +188,7 @@ namespace Hooker
 			hook.Add(Instruction.Create(OpCodes.Newarr, Module.TypeSystem.Object));
 			hook.Add(Instruction.Create(OpCodes.Stloc, interceptedArgs));
 
-			// rmh = methodof(this).MethodHandle;
+			// rmh = methodof([this method]).MethodHandle;
 			hook.Add(Instruction.Create(OpCodes.Ldtoken, method));
 
 			// thisObj = static ? null : this;

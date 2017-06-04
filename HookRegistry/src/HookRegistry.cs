@@ -38,8 +38,9 @@ namespace Hooks
 		// which holds the generic parameters.
 		private List<RuntimeTypeHandle> declaringTypes = new List<RuntimeTypeHandle>();
 
-		// Objects initiated and initialised of all discovered hook classes.
-		private List<object> activeHooks = new List<object>();
+		// All class types that implement hooking functionality
+		private List<Type> knownHooks = new List<Type>();
+		public Type[] KnownHooks => knownHooks.ToArray();
 
 		private static HookRegistry _instance;
 
@@ -124,6 +125,8 @@ namespace Hooks
 
 		public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
 		{
+			string message = string.Format("Registering parent generic type `{0}`", typeHandle.ToString());
+			HookRegistry.Get().Log(message);
 			HookRegistry.Get().declaringTypes.Add(typeHandle);
 		}
 
@@ -141,8 +144,10 @@ namespace Hooks
 				object[] hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
 				if (hooks != null && hooks.Length > 0)
 				{
-					// Get the default constructor.
-					activeHooks.Add(type.GetConstructor(new Type[] { }).Invoke(new object[] { }));
+					// Store type.
+					knownHooks.Add(type);
+					// Initialise hook through default constructor.
+					type.GetConstructor(new Type[] { }).Invoke(new object[] { });
 				}
 			}
 		}
@@ -170,14 +175,9 @@ namespace Hooks
 				// We use the blueprints that were registered to try and decode this generic instantiated type.
 				foreach (RuntimeTypeHandle declHandle in declaringTypes)
 				{
-					try
-					{
-						method = MethodBase.GetMethodFromHandle(rmh, declHandle);
-					}
-					catch (ArgumentException)
-					{
-						// Do nothing, continue loop..
-					}
+
+					method = MethodBase.GetMethodFromHandle(rmh, declHandle);
+					if (method != null) break;
 				}
 			}
 
