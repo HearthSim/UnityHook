@@ -35,6 +35,8 @@ Hooking a specific method when the **HooksRegistry** binary has no code to injec
 
 ## Build
 
+Visual Studio 2017 has to be installed to build both projects. Required components are C# - and Unity development tools! Visual Studio 2017 Community edition is free to download and capable to perform the build.
+
 1. Clone the repo;
 2. Create a junction link between the solution folder and the game install path. See `/createJunction.bat`;
 2. Open UnityHook solution file with Visual Studio;
