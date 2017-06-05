@@ -23,8 +23,8 @@ namespace GameKnowledgeBase
 			INVALID = 0,
 			LIB_CSHARP,
 			LIB_CSHARP_FIRSTPASS,
-			UNITY_ENGINE,
-			LIB_PLAYMAKER,
+			//UNITY_ENGINE,
+			//LIB_PLAYMAKER,
 		}
 
 		// File names of all assemblies, with dll extension.
@@ -34,8 +34,8 @@ namespace GameKnowledgeBase
 			"", // Empty/Default entry.
 			"Assembly-CSharp.dll",
 			"Assembly-CSharp-firstpass.dll",
-			"UnityEngine.dll",
-			"PlayMaker.dll",
+			//"UnityEngine.dll",
+			//"PlayMaker.dll",
 		};
 
 		public string[] LibraryFileNames

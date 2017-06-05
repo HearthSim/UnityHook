@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 
 using System.Reflection;
+using Hooker.Hook;
+using static Hooker.Hook.HooksFileParser;
 
 namespace Hooker
 {
@@ -14,36 +16,13 @@ namespace Hooker
 	{
 		public const string ALREADY_PATCHED =
 			"The file {0} is already patched and will be skipped.";
-		public const string PARSED_HOOKSFILE = "Parsed {0} entries.";
-		public const string CHECKING_ASSEMBLY = "Checking contents of assembly..";
 		public const string ASSEMBLY_ALREADY_PATCHED =
 			"The assembly file is already patched and will be skipped. " +
 			"If this message is is unexpected, restore the original assembly file and run this program again!";
 		public const string ASSEMBLY_NOT_PATCHED =
 			"The assembly is not patched because no function to hook was found.";
-		public const string ERR_WRITE_BACKUP = "Creating backup for assembly `{0}` failed!";
-		public const string ERR_WRITE_FILE = "Could not write patched data to file `{0}`!";
 		public const string ERR_COPY_HLIB =
 			"The HooksRegistry library could not be copied to {0}, try it manually after exiting this program!";
-
-		// This structure represents one line of text in our hooks file.
-		// It basically boils down to what function we target in which class.
-		public struct HOOK_ENTRY
-		{
-			public string TypeName;
-			public string MethodName;
-
-			public string FullMethodName
-			{
-				get
-				{
-					return TypeName + METHOD_SPLIT + MethodName;
-				}
-			}
-		}
-
-		// The string used to split TypeName from FunctionName; see ReadHooksFile(..)
-		public const string METHOD_SPLIT = "::";
 
 		// Collection of all options
 		private HookSubOptions _options
@@ -61,50 +40,6 @@ namespace Hooker
 			_options = options;
 		}
 
-		List<HOOK_ENTRY> ReadHooksFile(string hooksFilePath)
-		{
-			var hookEntries = new List<HOOK_ENTRY>();
-
-			// Open and parse our hooks file.
-			// File.ReadLines needs at least framework 4.0
-			foreach (string line in File.ReadLines(hooksFilePath))
-			{
-				// Remove all unnecessary whitespace
-				var lineTrimmed = line.Trim();
-				// Skip empty or comment lines
-				if (lineTrimmed.Length == 0 || lineTrimmed.IndexOf("//") == 0)
-				{
-					continue;
-				}
-				// In our hooks file we use C++ style syntax to avoid parsing problems
-				// regarding full names of Types and Methods. (namespaces!)
-				// Hook calls are now registered as FULL_TYPE_NAME::METHOD_NAME
-				// There are no methods registered without type, so this always works!
-				var breakIdx = lineTrimmed.IndexOf(METHOD_SPLIT);
-				// This is not a super robuust test, but it filters out the gross of
-				// impossible values.
-				if (breakIdx != -1)
-				{
-					// Create and store a new entry object
-					hookEntries.Add(new HOOK_ENTRY
-					{
-						// From start to "::"
-						TypeName = lineTrimmed.Substring(0, breakIdx),
-						// After (exclusive) "::" to end
-						MethodName = lineTrimmed.Substring(breakIdx + METHOD_SPLIT.Length),
-					});
-				}
-
-			}
-			using (Program.Log.OpenBlock("Parsing hooks file"))
-			{
-				Program.Log.Info("File location: `{0}`", hooksFilePath);
-				Program.Log.Info(PARSED_HOOKSFILE, hookEntries.Count);
-			}
-			return hookEntries;
-		}
-
-
 		public void CheckOptions()
 		{
 			// Gamedir is general option and is checked by Program!
@@ -113,18 +48,18 @@ namespace Hooker
 			_options.HooksFilePath = hooksfile;
 			if (!File.Exists(hooksfile))
 			{
-				throw new FileNotFoundException("Exe option `hooksfile` is invalid!");
+				throw new FileNotFoundException("Option `hooksfile` does not point to existing file!");
 			}
 
 			var libfile = Path.GetFullPath(_options.HooksRegistryFilePath);
 			_options.HooksRegistryFilePath = libfile;
 			if (!File.Exists(libfile))
 			{
-				throw new FileNotFoundException("Exe option `libfile` is invalid!");
+				throw new FileNotFoundException("Option `libfile` does not point to existing file!");
 			}
 
 			// Save the definition of the assembly containing our HOOKS.
-			var hooksAssembly = AssemblyDefinition.ReadAssembly(_options.HooksRegistryFilePath);
+			AssemblyDefinition hooksAssembly = AssemblyHelper.LoadAssembly(_options.HooksRegistryFilePath);
 			_options.HooksRegistryAssemblyBlueprint = hooksAssembly;
 			// Check if the Hooks.HookRegistry type is present, this is the entrypoint for all
 			// hooked methods.
@@ -134,7 +69,7 @@ namespace Hooker
 			_options.HookRegistryTypeBlueprint = hRegType;
 			if (hRegType == null)
 			{
-				throw new InvalidDataException("The HooksRegistry library does not contain `Hooks.HookRegistry`!");
+				throw new InvalidDataException("The HooksRegistry library does not contain type `Hooks.HookRegistry`!");
 			}
 		}
 
@@ -154,9 +89,7 @@ namespace Hooker
 				{
 					// Create an instance of our own assembly in a new appdomain.
 					object instance = testingDomain
-						.CreateInstanceAndUnwrap(Assembly.GetExecutingAssembly().FullName, "Hooker.HookRegistryTester");
-
-					/* The tester object will spawn a new domain in which the HookRegistry assembly is executed. */
+						.CreateInstanceAndUnwrap(Assembly.GetExecutingAssembly().FullName, typeof(HookRegistryTester).FullName);
 
 					// All methods executed here are actually executed in the testing domain!
 					var hrTester = (HookRegistryTester)instance;
@@ -204,6 +137,7 @@ namespace Hooker
 					string libFolderPath = Path.GetDirectoryName(referencedLibPath);
 					if (!libFolderPath.Equals(origHRFolderPath)) continue;
 
+					// Construct name for library file under the game library folder.
 					string libFileName = Path.GetFileName(referencedLibPath);
 					string inLibPath = Path.Combine(gameLibFolder, libFileName);
 
@@ -216,7 +150,7 @@ namespace Hooker
 						{
 							// Update the options object to reflect the copied library.
 							_options.HooksRegistryFilePath = inLibPath;
-							_options.HooksRegistryAssemblyBlueprint = AssemblyDefinition.ReadAssembly(inLibPath);
+							_options.HooksRegistryAssemblyBlueprint = AssemblyHelper.LoadAssembly(inLibPath, gameLibFolder);
 						}
 					}
 					catch (Exception)
@@ -268,7 +202,7 @@ namespace Hooker
 						// Construct a hooker wrapper around the main Module of the assembly.
 						// The wrapper facilitates hooking into method calls.
 						ModuleDefinition mainModule = assembly.MainModule;
-						var wrapper = Hooker.New(mainModule, _options);
+						var wrapper = HookLogic.New(mainModule, _options);
 
 						// Keep track of hooked methods
 						bool isHooked = false;
@@ -321,7 +255,7 @@ namespace Hooker
 							// Try to find the path throwing an exception.. but this method is not foolproof!
 							object path = typeof(IOException).GetField("_maybeFullPath",
 																	BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase)?.GetValue(e);
-							Program.Log.Warn(ERR_WRITE_FILE, path);
+							Program.Log.Warn("Could not write patched data to file `{0}`!", path);
 
 							throw e;
 						}

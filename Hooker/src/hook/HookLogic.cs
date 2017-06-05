@@ -7,9 +7,9 @@ using System.Linq;
 using Mono.Collections.Generic;
 using Hooker.util;
 
-namespace Hooker
+namespace Hooker.Hook
 {
-	class Hooker
+	class HookLogic
 	{
 		public const string UNEXPECTED_METHOD =
 			"The method `{0}` is not expected by your version of HookRegistry." +
@@ -27,11 +27,11 @@ namespace Hooker
 		// Method that gets called when entering a hooked method
 		private MethodReference onCallMethodRef;
 
-		private Hooker()
+		private HookLogic()
 		{
 		}
 
-		public static Hooker New(ModuleDefinition module, HookSubOptions options)
+		public static HookLogic New(ModuleDefinition module, HookSubOptions options)
 		{
 			/*
 			    These things have to be recreated for every module!
@@ -45,7 +45,7 @@ namespace Hooker
 			MethodDefinition onCallMethod = _hookRegistryType.Methods.First(mi => mi.Name.Equals("OnCall"));
 			MethodReference onCallMethodRef = module.Import(onCallMethod);
 
-			var newObj = new Hooker
+			var newObj = new HookLogic
 			{
 				Module = module,
 				onCallMethodRef = onCallMethodRef,
@@ -85,7 +85,7 @@ namespace Hooker
 				{
 					try
 					{
-						var methodFullname = method.DeclaringType.FullName + HookHelper.METHOD_SPLIT + method.Name;
+						var methodFullname = method.DeclaringType.FullName + HooksFileParser.METHOD_SPLIT + method.Name;
 						// WARN because no hookregistry expects this method to be hooked
 						if (expectedMethods.FirstOrDefault(m => m.Equals(methodFullname)) == null)
 						{

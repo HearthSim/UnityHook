@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
-namespace Hooker
+namespace Hooker.Hook
 {
 	/*
 	 * Special code for loading and testing the Hookregistry library seperated from the hooking application domain.

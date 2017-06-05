@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace GameKnowledgeBase
+﻿namespace GameKnowledgeBase
 {
-    public interface IKnowledge
+	public interface IKnowledge
     {
 		// Path to the library files, relative to the install path of the game.
 		string LibraryRelativePath
