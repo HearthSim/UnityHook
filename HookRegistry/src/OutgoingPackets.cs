@@ -2,10 +2,12 @@
 // The packet is caught from the communication stream between client and server.
 
 using bgs;
-using HackstoneAnalyzer.PayloadFormat;
-using System;
-using Hooks.PacketDumper;
 using bnet.protocol.authentication;
+using HackstoneAnalyzer.PayloadFormat;
+using Hooks.PacketDumper;
+using System;
+using static Google.Protobuf.WireFormat;
+using System.Runtime.CompilerServices;
 
 namespace Hooks
 {
@@ -22,9 +24,24 @@ namespace Hooks
 
 		public OutgoingPackets()
 		{
+			reentrant = false;
+
+			// Perform hooking administration.
 			HookRegistry.Register(OnCall);
 			RegisterGenericDeclaringTypes();
-			reentrant = false;
+
+			ForceLoadReferences();
+		}
+
+		// Use types from dependancy, since it's not possible to detect referenced libraries 
+		// without code needing them.
+		[MethodImpl(MethodImplOptions.NoOptimization)]
+		private void ForceLoadReferences()
+		{
+#pragma warning disable CS0219 // Variable is assigned but its value is never used
+			WireType _nil = WireType.Fixed32;
+			ulong _magic = Util.MAGIC_V;
+#pragma warning restore CS0219 // Variable is assigned but its value is never used
 		}
 
 		private void RegisterGenericDeclaringTypes()
@@ -74,7 +91,7 @@ namespace Hooks
 
 				// Test for LogonRequest body packet, since that one contains the version string
 				var logonRequest = body as LogonRequest;
-				if(logonRequest != null)
+				if (logonRequest != null)
 				{
 					dumper.InitialiseHandshake(logonRequest.Version);
 				}
