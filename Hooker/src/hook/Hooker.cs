@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Mono.Collections.Generic;
+using Hooker.util;
 
 namespace Hooker
 {
@@ -13,7 +14,7 @@ namespace Hooker
 		public const string UNEXPECTED_METHOD =
 			"The method `{0}` is not expected by your version of HookRegistry." +
 			"Continuing will have no effect. Please update your hooksfile or retrieve another HookRegistry dll file that hooks into the given method!";
-		public const string HOOKED_METHOD = "Method `{0}` hooked.";
+		public const string HOOKED_METHOD = "Method `{0}` hooked.\n";
 		public const string HOOK_PROBLEM = "A problem occurred while hooking `{0}`: {1}\n" +
 										   "Hooking will continue!";
 

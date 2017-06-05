@@ -2,7 +2,7 @@
 using CommandLine.Text;
 using Mono.Cecil;
 
-namespace Hooker
+namespace Hooker.util
 {
 	// General options for any operation
 	class Options

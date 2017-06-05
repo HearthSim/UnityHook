@@ -1,6 +1,7 @@
 ﻿using GameKnowledgeBase;
 using System;
 using System.IO;
+using Hooker.util;
 
 namespace Hooker
 {
@@ -24,7 +25,7 @@ namespace Hooker
 			Log = new Logger(options);
 
 			// Check the game path
-			var gamePath = Path.GetFullPath(options.GamePath);
+			string gamePath = Path.GetFullPath(options.GamePath);
 			options.GamePath = gamePath;
 			if (!Directory.Exists(gamePath))
 			{
@@ -82,11 +83,13 @@ namespace Hooker
 				switch (invokedOperation)
 				{
 					case OPERATION_HOOK:
+						Log.Info("Hooking operation started!\n");
 						var hookHelper = new HookHelper((HookSubOptions)invokedOperationOptions);
 						hookHelper.TryHook(gameKnowledge);
 						Log.Info("Succesfully hooked the game libraries!");
 						break;
 					case OPERATION_RESTORE:
+						Log.Info("Restore operation started!\n");
 						var restore = new Restore((RestoreSubOptions)invokedOperationOptions);
 						restore.TryRestore(gameKnowledge);
 						Log.Info("Succesfully restored the original game libraries!");
