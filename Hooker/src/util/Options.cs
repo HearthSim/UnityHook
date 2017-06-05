@@ -75,10 +75,20 @@ namespace Hooker.util
 			set;
 		}
 
-		[Option('l', "libfile", Required = false, DefaultValue = "HookRegistry.dll",
+		[Option('l', "libfile", Required = true, DefaultValue = "HookRegistry.dll",
 				HelpText =
 					"The library that contains the functionality that gets executed when a hooked method triggers.")]
 		public string HooksRegistryFilePath
+		{
+			get;
+			set;
+		}
+
+		[Option("overwrite", Required = false, DefaultValue = false,
+				HelpText = "Dependancies of libfile will be copied to the game library folder, overwriting existing files.")]
+		// Careful! Setting this to true might result in unexpected game behaviour, since game libraries itself are
+		// most likely to be a dependancy themselves!
+		public bool OverwriteDependancies
 		{
 			get;
 			set;

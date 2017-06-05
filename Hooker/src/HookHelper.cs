@@ -114,9 +114,9 @@ namespace Hooker
 
 		void CopyLibraries(GameKB knowledgeBase)
 		{
-			// Save the original folder of HookRegistry for later usage.
+			// The original folder containing HookRegistry library.
 			string origHRFolderPath = Path.GetDirectoryName(_options.HooksRegistryFilePath);
-			// The target folder.
+			// The library folder of our game.
 			string gameLibFolder = knowledgeBase.LibraryPath;
 
 			// List of all assemblies to copy to the game library folder.
@@ -127,8 +127,13 @@ namespace Hooker
 			// Only keep unique entries.
 			assembliesToCopy = assembliesToCopy.Distinct();
 
+			// If TRUE, existing files in gameLibFolder will be overwritten if a dependancy has the
+			// same name.
+			bool overwriteDependancies = _options.OverwriteDependancies;
+
 			using (Program.Log.OpenBlock("Copying HookRegistry dependancies"))
 			{
+				Program.Log.Info("Source directory `{0}`", origHRFolderPath);
 				Program.Log.Info("Target directory `{0}`", gameLibFolder);
 
 				foreach (string referencedLibPath in ReferencedLibraryPaths)
@@ -139,18 +144,25 @@ namespace Hooker
 
 					// Construct name for library file under the game library folder.
 					string libFileName = Path.GetFileName(referencedLibPath);
-					string inLibPath = Path.Combine(gameLibFolder, libFileName);
+					string targetLibPath = Path.Combine(gameLibFolder, libFileName);
 
 					try
 					{
-						File.Copy(referencedLibPath, inLibPath, true);
-						Program.Log.Info("SUCCESS Copied binary `{0}`", libFileName);
-
-						if (referencedLibPath == _options.HooksRegistryFilePath)
+						if (!overwriteDependancies && File.Exists(targetLibPath))
 						{
-							// Update the options object to reflect the copied library.
-							_options.HooksRegistryFilePath = inLibPath;
-							_options.HooksRegistryAssemblyBlueprint = AssemblyHelper.LoadAssembly(inLibPath, gameLibFolder);
+							Program.Log.Info("Skipped `{0}`", libFileName);
+						}
+						else
+						{
+							File.Copy(referencedLibPath, targetLibPath, true);
+							Program.Log.Info("SUCCESS Copied binary `{0}`", libFileName);
+
+							if (referencedLibPath == _options.HooksRegistryFilePath)
+							{
+								// Update the options object to reflect the copied library.
+								_options.HooksRegistryFilePath = targetLibPath;
+								_options.HooksRegistryAssemblyBlueprint = AssemblyHelper.LoadAssembly(targetLibPath, gameLibFolder);
+							}
 						}
 					}
 					catch (Exception)
