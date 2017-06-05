@@ -58,6 +58,7 @@
     <Compile Include="src\util\AssemblyHelper.cs" />
     <Compile Include="src\hook\Hooker.cs" />
     <Compile Include="src\hook\HookHelper.cs" />
+    <Compile Include="src\util\LogBlock.cs" />
     <Compile Include="src\util\Logger.cs" />
     <Compile Include="src\util\Options.cs" />
     <Compile Include="src\Program.cs" />
