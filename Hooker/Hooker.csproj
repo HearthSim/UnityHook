@@ -56,14 +56,15 @@
   <ItemGroup>
     <Compile Include="src\hook\HookRegistryTester.cs" />
     <Compile Include="src\util\AssemblyHelper.cs" />
-    <Compile Include="src\hook\Hooker.cs" />
-    <Compile Include="src\hook\HookHelper.cs" />
+    <Compile Include="src\hook\HookLogic.cs" />
+    <Compile Include="src\HookHelper.cs" />
+    <Compile Include="src\hook\HooksFileParser.cs" />
     <Compile Include="src\util\LogBlock.cs" />
     <Compile Include="src\util\Logger.cs" />
     <Compile Include="src\util\Options.cs" />
     <Compile Include="src\Program.cs" />
     <Compile Include="properties\AssemblyInfo.cs" />
-    <Compile Include="src\hook\Restore.cs" />
+    <Compile Include="src\Restore.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="example_hooks" />
