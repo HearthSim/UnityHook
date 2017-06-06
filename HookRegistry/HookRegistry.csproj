@@ -64,6 +64,7 @@
     <Compile Include="src\packetdumper\DumpServer.cs" />
     <Compile Include="src\packetdumper\Serializer.cs" />
     <Compile Include="src\SSLDisable.cs" />
+    <Compile Include="src\ReferenceLoader.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

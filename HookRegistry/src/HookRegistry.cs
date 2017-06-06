@@ -52,8 +52,11 @@ namespace Hooks
 				// Initialise the assembly store.
 				_instance.Init();
 
-				// Setup all hook information
+				// Setup all hook information.
 				_instance.LoadRuntimeHooks();
+
+				// Pre-load necessary library files.
+				ReferenceLoader.Load();
 
 				try
 				{

@@ -6,8 +6,6 @@ using bnet.protocol.authentication;
 using HackstoneAnalyzer.PayloadFormat;
 using Hooks.PacketDumper;
 using System;
-using static Google.Protobuf.WireFormat;
-using System.Runtime.CompilerServices;
 
 namespace Hooks
 {
@@ -29,19 +27,6 @@ namespace Hooks
 			// Perform hooking administration.
 			HookRegistry.Register(OnCall);
 			RegisterGenericDeclaringTypes();
-
-			ForceLoadReferences();
-		}
-
-		// Use types from dependancy, since it's not possible to detect referenced libraries 
-		// without code needing them.
-		[MethodImpl(MethodImplOptions.NoOptimization)]
-		private void ForceLoadReferences()
-		{
-#pragma warning disable CS0219 // Variable is assigned but its value is never used
-			WireType _nil = WireType.Fixed32;
-			ulong _magic = Util.MAGIC_V;
-#pragma warning restore CS0219 // Variable is assigned but its value is never used
 		}
 
 		private void RegisterGenericDeclaringTypes()
