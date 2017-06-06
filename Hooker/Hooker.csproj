@@ -67,7 +67,9 @@
     <Compile Include="src\Restore.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="example_hooks" />
+    <None Include="example_hooks">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="..\GameKnowledgeBase\GameKnowledgeBase.projitems" Label="Shared" />

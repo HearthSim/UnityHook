@@ -109,8 +109,9 @@ namespace Hooker.Hook
 		// the missing library dll file.
 		private Assembly FallbackAssemblyHRReference(object sender, ResolveEventArgs args)
 		{
+			var referenceName = new AssemblyName(args.Name);
 			// Filename of the assembly, minus the extension.
-			string libFileName = args.Name;
+			string libFileName = referenceName.Name;
 			// Check if the file exists under game lib folder.
 			// TODO: .dll is hardcoded, but it could also be .exe or whatnot..
 			string fullLibPath = Path.Combine(_hrLibraryPath, libFileName + ".dll");
@@ -134,8 +135,9 @@ namespace Hooker.Hook
 		// the missing library dll file.
 		private Assembly FallbackAssemblyLoadGameLibrary(object sender, ResolveEventArgs args)
 		{
+			var referenceName = new AssemblyName(args.Name);
 			// Filename of the assembly, minus the extension.
-			string libFileName = args.Name;
+			string libFileName = referenceName.Name;
 			// Check if the file exists under game lib folder.
 			// TODO: .dll is hardcoded, but it could also be .exe or whatnot..
 			string fullLibPath = Path.Combine(_gameLibraryPath, libFileName + ".dll");
