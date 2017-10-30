@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using System;
@@ -60,7 +60,7 @@ namespace Hooker.Hook
 			// A type is selected if the predicate, inside the lambda definition, returns true.
 			var matchingTypes = Module.Types.Where(t =>
 			{
-				var idx = t.Name.IndexOf(typeName);
+				var idx = t.FullName.IndexOf(typeName);
 				// This one is clever!
 				//      - Return false if no match was found
 				//      - Return true IF one of the next is true:
