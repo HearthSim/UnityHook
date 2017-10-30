@@ -55,6 +55,5 @@ ipch/
 *.vsp
 *.vspx
 
-packages/
-hs_link/
-
+packages
+hs_link
