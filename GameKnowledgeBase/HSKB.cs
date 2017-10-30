@@ -1,4 +1,4 @@
-﻿// File which holds information about the HearthStone game.
+// File which holds information about the HearthStone game.
 // Specifically; Install directory structure, location of lib files and
 // possibly more.
 
@@ -34,6 +34,7 @@ namespace GameKnowledgeBase
 			"", // Empty/Default entry.
 			"Assembly-CSharp.dll",
 			"Assembly-CSharp-firstpass.dll",
+			"System.dll",
 			//"UnityEngine.dll",
 			//"PlayMaker.dll",
 		};
