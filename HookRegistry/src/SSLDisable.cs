@@ -1,4 +1,4 @@
-﻿// This hook causes Hearthstone to communicate in plaintext, without using TLS/SSL.
+// This hook causes Hearthstone to communicate in plaintext, without using TLS/SSL.
 // NOTE: This is designed for use with 3rd party servers that don't support TLS connections
 // and will cause the Hearthstone client to fail to connect to an official server, therefore
 // it is disabled by default.
@@ -7,6 +7,7 @@
 
 using bgs;
 using System;
+using System.Reflection;
 
 namespace Hooks
 {
@@ -42,7 +43,7 @@ namespace Hooks
 		private object ProxyBNetInit(ref object bnetObject, object[] args)
 		{
 			// Dynamically invoke the Init method as defined by the type
-			var initMethod = typeof(BattleNetCSharp).GetMethod("Init");
+			MethodInfo initMethod = typeof(BattleNetCSharp).GetMethod("Init");
 			return initMethod.Invoke(bnetObject, args);
 		}
 
@@ -81,7 +82,7 @@ namespace Hooks
 			catch (Exception e)
 			{
 				// Write meaningful information to the game output.
-				string message = string.Format(HOOK_FAILED, e.Message);
+				string message = String.Format(HOOK_FAILED, e.Message);
 				HookRegistry.Panic(message);
 			}
 

@@ -1,4 +1,4 @@
-﻿// Assembly wide entry point for hooked methods (within game libraries).
+// Assembly wide entry point for hooked methods (within game libraries).
 // The purpose of this project is to have NO DEPENDANCIES which facilitates
 // it's distribution and installment.
 // If there are introduced dependancies, make sure to copy them to the directory
@@ -86,17 +86,22 @@ namespace Hooks
 		private void TestInGame()
 		{
 			_IsWithinUnity = UnityEngine.Application.isPlaying;
-			Log("Running inside Unity player, ALLOWING hooks");
+			Internal_Log("Running inside Unity player, ALLOWING hooks");
+		}
+
+		public static void Log(string message)
+		{
+			Get().Internal_Log(message);
 		}
 
 		// Wrapper around the log method from unity.
-		// This method writes to the log file of the unity game
-		public void Log(string message)
+		// This method writes to the log file of the unity game.
+		public void Internal_Log(string message)
 		{
 			if (_IsWithinUnity)
 			{
 				// Create a nice format before printing to log
-				string logmessage = string.Format("[HOOKER]\t{0}", message);
+				string logmessage = String.Format("[HOOKER]\t{0}", message);
 				UnityEngine.Debug.Log(logmessage);
 			}
 		}
@@ -105,9 +110,9 @@ namespace Hooks
 		// This is to make sure we don't break anything.
 		public static void Panic(string message = "")
 		{
-			string msg = string.Format("Forced crash because of error: `{0}` !", message);
+			string msg = String.Format("Forced crash because of error: `{0}` !", message);
 			// Push the message to the game log
-			Get().Log(msg);
+			Get().Internal_Log(msg);
 
 			// Make the game crash!
 			throw new Exception("[HOOKER] Forced crash because of an error!");
@@ -117,26 +122,26 @@ namespace Hooks
 		// Return the response coming from the hook, because it's needed by the original library code   ! important
 		public static object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
-			return HookRegistry.Get().Internal_OnCall(rmh, thisObj, args);
+			return Get().Internal_OnCall(rmh, thisObj, args);
 		}
 
 		// Add a hook listener
 		public static void Register(Callback cb)
 		{
-			HookRegistry.Get().callbacks.Add(cb);
+			Get().callbacks.Add(cb);
 		}
 
 		public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
 		{
-			string message = string.Format("Registering parent generic type `{0}`", typeHandle.ToString());
-			HookRegistry.Get().Log(message);
-			HookRegistry.Get().declaringTypes.Add(typeHandle);
+			string message = String.Format("Registering parent generic type `{0}`", typeHandle.ToString());
+			Get().Internal_Log(message);
+			Get().declaringTypes.Add(typeHandle);
 		}
 
 		// Remove a hook listener
 		public static void Unregister(Callback cb)
 		{
-			HookRegistry.Get().callbacks.Remove(cb);
+			Get().callbacks.Remove(cb);
 		}
 
 		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
@@ -196,11 +201,11 @@ namespace Hooks
 			string methodName = method.Name;
 			// TODO: replace with parameters of function.
 			string paramString = "..";
-			string message = string.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
+			string message = String.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
 			// Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
 			// This method prints into the game's debug log
-			Log(message);
+			Internal_Log(message);
 
 			// Execute each hook, because we don't know which one to actually target
 			foreach (Callback cb in callbacks)

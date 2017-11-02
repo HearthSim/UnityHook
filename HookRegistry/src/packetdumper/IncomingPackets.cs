@@ -99,7 +99,7 @@ namespace Hooks
 			}
 
 			string message = string.Format(RECEIVED_PACKET_NOTIFY, packetTypeString, serviceID, methodID);
-			HookRegistry.Get().Log(message);
+			HookRegistry.Get().Internal_Log(message);
 		}
 
 		object OnCall(string typeName, string methodName, object thisObj, object[] args)
