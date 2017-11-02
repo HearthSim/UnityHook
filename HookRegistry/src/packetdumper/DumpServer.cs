@@ -1,4 +1,4 @@
-﻿using HackstoneAnalyzer.PayloadFormat;
+using HackstoneAnalyzer.PayloadFormat;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -33,11 +33,28 @@ namespace Hooks.PacketDumper
 			_timeWatch = new Stopwatch();
 			_timeWatch.Start();
 
-			_connectionListener = new TcpListener(IPAddress.Loopback, ANALYZER_LISTENER_PORT);
+			_connectionListener = null;
 			_connections = new List<Socket>();
 
 			_replayBuffer = new MemoryStream();
 			_bufferLock = new object();
+		}
+
+		private void Setup()
+		{
+			var listeningPort = ANALYZER_LISTENER_PORT;
+
+			for(int i = 0; i < 5; ++i)
+			{
+				try {
+					_connectionListener = new TcpListener(IPAddress.Loopback, listeningPort+i);
+
+
+				} catch(Exception) // TODO; Change to explicit exception
+				{
+					// Do nothing
+				}
+			}
 		}
 
 		private static DumpServer _thisObj;
@@ -58,7 +75,7 @@ namespace Hooks.PacketDumper
 		{
 			if (_handshakePayload == null)
 			{
-				HookRegistry.Get().Log("DumpServer - Initialising handshake");
+				HookRegistry.Get().Internal_Log("DumpServer - Initialising handshake");
 				var handshake = new Handshake()
 				{
 					Magic = Util.MAGIC_V,
@@ -99,7 +116,7 @@ namespace Hooks.PacketDumper
 			catch (Exception e)
 			{
 				string message = string.Format("Connecting analyzer failed for following reason: {0}", e.Message);
-				HookRegistry.Get().Log(message);
+				HookRegistry.Get().Internal_Log(message);
 			}
 
 			if (client != null)
@@ -134,7 +151,7 @@ namespace Hooks.PacketDumper
 				catch (Exception e)
 				{
 					string message = string.Format("Sending BACKLOG to newly attached analyzer failed for following reason: {0}", e.Message);
-					HookRegistry.Get().Log(message);
+					HookRegistry.Get().Internal_Log(message);
 				}
 			}
 
@@ -154,7 +171,7 @@ namespace Hooks.PacketDumper
 			catch (Exception e)
 			{
 				string message = string.Format("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
-				HookRegistry.Get().Log(message);
+				HookRegistry.Get().Internal_Log(message);
 				CleanSocket(client);
 			}
 		}
@@ -217,7 +234,7 @@ namespace Hooks.PacketDumper
 				catch (Exception e)
 				{
 					string message = string.Format("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
-					HookRegistry.Get().Log(message);
+					HookRegistry.Get().Internal_Log(message);
 					CleanSocket(connection);
 				}
 			}

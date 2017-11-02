@@ -1,4 +1,4 @@
-﻿using Google.Protobuf.Reflection;
+using Google.Protobuf.Reflection;
 using HackstoneAnalyzer.PayloadFormat;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ namespace Hooks
 		/*
 		 * Referenced libraries are loaded by the .NET runtime when they are used.
 		 * 
-		 * UnityHook loads this library file (HookRegistry.dll) and starts the initialisation procedure
+		 * UnityHook loads THIS library file (HookRegistry.dll) and starts the initialisation procedure
 		 * to validate it's contents.
 		 * While doing that, all loaded libraries that were referenced during initialisation were recorded
 		 * and they will be copied WITH HookRegistry.dll to the game library folder.
@@ -30,6 +30,8 @@ namespace Hooks
 			// Put here a type statement for each referenced library, which MUST BE COPIED together 
 			// with HookRegistry.dll to the game's library folder.
 			// e.g. typeof(String);
+			// NOTICE: Do NOT insert types refering to the original game libraries, because it could mess with versioning
+			// and produce strange runtime issues!
 
 			_references = new List<Type>()
 			{			
