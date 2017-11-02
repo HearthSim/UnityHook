@@ -1,4 +1,4 @@
-﻿using CommandLine;
+using CommandLine;
 using CommandLine.Text;
 using Mono.Cecil;
 
@@ -84,7 +84,7 @@ namespace Hooker.util
 			set;
 		}
 
-		[Option("overwrite", Required = false, DefaultValue = false,
+		[Option("overwrite", Required = false, DefaultValue = true,
 				HelpText = "Dependancies of libfile will be copied to the game library folder, overwriting existing files.")]
 		// Careful! Setting this to true might result in unexpected game behaviour, since game libraries itself are
 		// most likely to be a dependancy themselves!
