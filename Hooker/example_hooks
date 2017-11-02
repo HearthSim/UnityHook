@@ -22,4 +22,9 @@
 // BattleNetPacket::IsLoaded
 
 // Hooks the mono system layer to Tee network data.
+// The socket methods have multiple versions with different parameters!
 System.Net.Security.SslStream::BeginWrite
+System.Net.Sockets.Socket::BeginSend
+
+System.Net.Security.SslStream::BeginRead
+System.Net.Sockets.Socket::BeginReceive

@@ -1,4 +1,4 @@
-﻿using GameKnowledgeBase;
+using GameKnowledgeBase;
 using Hooker.util;
 using Mono.Cecil;
 using System;
@@ -44,14 +44,14 @@ namespace Hooker
 		{
 			// Gamedir is general option and is checked by Program!
 
-			var hooksfile = Path.GetFullPath(_options.HooksFilePath);
+			string hooksfile = Path.GetFullPath(_options.HooksFilePath);
 			_options.HooksFilePath = hooksfile;
 			if (!File.Exists(hooksfile))
 			{
 				throw new FileNotFoundException("Option `hooksfile` does not point to existing file!");
 			}
 
-			var libfile = Path.GetFullPath(_options.HooksRegistryFilePath);
+			string libfile = Path.GetFullPath(_options.HooksRegistryFilePath);
 			_options.HooksRegistryFilePath = libfile;
 			if (!File.Exists(libfile))
 			{
