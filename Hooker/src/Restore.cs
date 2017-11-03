@@ -1,4 +1,4 @@
-﻿using GameKnowledgeBase;
+using GameKnowledgeBase;
 using Hooker.util;
 using System;
 using System.IO;
@@ -32,9 +32,9 @@ namespace Hooker
 			CheckOptions();
 
 			// Iterate all known libraries for the game.
-			foreach (var gameLibFilePath in gameKnowledge.LibraryFilePaths)
+			foreach (string gameLibFilePath in gameKnowledge.LibraryFilePaths)
 			{
-				var backupLibPath = AssemblyHelper.GetPathBackup(gameLibFilePath);
+				string backupLibPath = AssemblyHelper.GetPathBackup(gameLibFilePath);
 				if (File.Exists(backupLibPath))
 				{
 					// Restore the original file.

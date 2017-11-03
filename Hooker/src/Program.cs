@@ -1,4 +1,4 @@
-﻿using GameKnowledgeBase;
+using GameKnowledgeBase;
 using System;
 using System.IO;
 using Hooker.util;
@@ -86,13 +86,13 @@ namespace Hooker
 						Log.Info("Hooking operation started!\n");
 						var hookHelper = new HookHelper((HookSubOptions)invokedOperationOptions);
 						hookHelper.TryHook(gameKnowledge);
-						Log.Info("Succesfully hooked the game libraries!");
+						Log.Info("Hooked the game libraries!");
 						break;
 					case OPERATION_RESTORE:
 						Log.Info("Restore operation started!\n");
 						var restore = new Restore((RestoreSubOptions)invokedOperationOptions);
 						restore.TryRestore(gameKnowledge);
-						Log.Info("Succesfully restored the original game libraries!");
+						Log.Info("Restored the original game libraries!");
 						break;
 					default:
 						throw new ArgumentException("Invalid verb processed");
