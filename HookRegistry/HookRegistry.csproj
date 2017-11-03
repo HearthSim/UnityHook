@@ -21,6 +21,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -29,6 +30,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp">
@@ -42,6 +44,7 @@
     <Reference Include="Google.Protobuf">
       <HintPath>..\lib\PayloadFormat\Debug\net35\Google.Protobuf.dll</HintPath>
     </Reference>
+    <Reference Include="Mono.Security" />
     <Reference Include="PayloadFormat">
       <HintPath>..\lib\PayloadFormat\Debug\net35\PayloadFormat.dll</HintPath>
     </Reference>
@@ -59,13 +62,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\HookRegistry.cs" />
-    <Compile Include="src\packetdumper\IncomingPackets.cs" />
-    <Compile Include="src\packetdumper\OutgoingPackets.cs" />
+    <Compile Include="src\archived\IncomingPackets.cs" />
+    <Compile Include="src\archived\OutgoingPackets.cs" />
+    <Compile Include="src\hooks\SocketHook.cs" />
+    <Compile Include="src\hooks\HookTemplate.cs" />
     <Compile Include="src\packetdumper\DumpServer.cs" />
-    <Compile Include="src\packetdumper\Serializer.cs" />
-    <Compile Include="src\SSLDisable.cs" />
+    <Compile Include="src\hooks\SSLDisable.cs" />
+    <Compile Include="src\packetdumper\PegasusPacketDecoder.cs" />
     <Compile Include="src\ReferenceLoader.cs" />
-    <Compile Include="src\SSLStream.cs" />
+    <Compile Include="src\hooks\SslStreamHook.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

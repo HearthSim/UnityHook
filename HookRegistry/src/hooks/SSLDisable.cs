@@ -54,7 +54,7 @@ namespace Hooks
 			return new string[] { "bgs.BattleNetCSharp::Init" };
 		}
 
-		object OnCall(string typeName, string methodName, object thisObj, object[] args)
+		object OnCall(string typeName, string methodName, object thisObj, object[] args, IntPtr[] refArgs, int[] refIdxMatch)
 		{
 			if (typeName != "bgs.BattleNetCSharp" || methodName != "Init")
 			{

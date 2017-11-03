@@ -1,5 +1,7 @@
-﻿// This hook introduces additional code to dump each SENT packet.
+// This hook introduces additional code to dump each SENT packet.
 // The packet is caught from the communication stream between client and server.
+
+#if false
 
 using bgs;
 using bnet.protocol.authentication;
@@ -71,7 +73,7 @@ namespace Hooks
 				// Calculate the hash of the body, which is passed to analyzers.
 				uint bodyHash = Util.GenerateHashFromObjectType(body);
 
-				byte[] packetData = Serializer.SerializePacket(packet);
+				byte[] packetData = DumpServer.SerializePacket(packet);
 				dumper.SendPacket(PacketType.Battlenetpacket, PacketDirection.Outgoing, bodyHash, packetData);
 
 				// Test for LogonRequest body packet, since that one contains the version string
@@ -92,7 +94,7 @@ namespace Hooks
 				// Calculate the hash of the body, which is passed to analyzers.
 				uint bodyHash = Util.GenerateHashFromObjectType(body);
 
-				byte[] packetData = Serializer.SerializePacket(packet);
+				byte[] packetData = DumpServer.SerializePacket(packet);
 				dumper.SendPacket(PacketType.Pegasuspacket, PacketDirection.Outgoing, bodyHash, packetData);
 			}
 			else
@@ -135,3 +137,5 @@ namespace Hooks
 		}
 	}
 }
+
+#endif
