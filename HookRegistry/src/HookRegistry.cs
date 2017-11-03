@@ -30,17 +30,19 @@ namespace Hooks
 										object[] args);
 
 		// All callback functions registered to with this object
-		private List<Callback> callbacks = new List<Callback>();
+		private List<Callback> _callbacks = new List<Callback>();
 
 		// All types which have a generic parameter that are expected to be hooked.
 		// The declaring type is used as structural blueprint for the generic instantiated type.
 		// Basically: Generic instantiations are seperate types, different from the actual type
 		// which holds the generic parameters.
-		private List<RuntimeTypeHandle> declaringTypes = new List<RuntimeTypeHandle>();
+		private List<RuntimeTypeHandle> _declaringTypes = new List<RuntimeTypeHandle>();
 
 		// All class types that implement hooking functionality
-		private List<Type> knownHooks = new List<Type>();
-		public Type[] KnownHooks => knownHooks.ToArray();
+		private List<Type> _knownHooks = new List<Type>();
+		public Type[] KnownHooks => _knownHooks.ToArray();
+
+		#region INIT
 
 		private static HookRegistry _instance;
 
@@ -52,22 +54,18 @@ namespace Hooks
 				// Initialise the assembly store.
 				_instance.Init();
 
-				// Setup all hook information.
-				_instance.LoadRuntimeHooks();
+				// Test if we're running inside the unity player.
+				_instance._IsWithinUnity = IsWithinUnity();
+				if (_instance._IsWithinUnity)
+				{
+					_instance.Internal_Log("Running inside Unity player, ALLOWING hooks");
+				}
 
 				// Pre-load necessary library files.
 				ReferenceLoader.Load();
 
-				try
-				{
-					// Test if this code is running within the Unity Engine
-					_instance.TestInGame();
-				}
-				catch (SecurityException)
-				{
-					// Do nothing
-				}
-
+				// Setup all hook information.
+				_instance.LoadRuntimeHooks();
 			}
 			return _instance;
 		}
@@ -83,11 +81,71 @@ namespace Hooks
 		}
 
 		// Method that tests the execution context for the presence of an initialized Unity framework.
-		private void TestInGame()
+		private static bool TestInGame()
 		{
-			_IsWithinUnity = UnityEngine.Application.isPlaying;
-			Internal_Log("Running inside Unity player, ALLOWING hooks");
+			return UnityEngine.Application.isPlaying;
 		}
+
+		// Hackish way to detect if we're running in an Unity appdomain.
+		public static bool IsWithinUnity()
+		{
+			try
+			{
+				// Test if this code is running within the Unity Engine
+				return TestInGame();
+			}
+			catch (SecurityException)
+			{
+				// Do nothing
+				return false;
+			}
+		}
+
+		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
+		void LoadRuntimeHooks()
+		{
+			Internal_Log("Enumerating all found hook types:");
+			foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
+			{
+				object[] hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
+				if (hooks != null && hooks.Length > 0)
+				{
+					// Store type.
+					_knownHooks.Add(type);
+					// Initialise hook through default constructor.
+					type.GetConstructor(new Type[] { }).Invoke(new object[] { });
+					Internal_Log(type.Name);
+				}
+			}
+		}
+
+		// Add a hook listener
+		public static void Register(Callback cb)
+		{
+			Get()._callbacks.Add(cb);
+			string message = String.Format("Registered callback; {0}", cb.Method.Name);
+			Get().Internal_Log(message);
+		}
+
+		// Remove a hook listener
+		public static void Unregister(Callback cb)
+		{
+			Get()._callbacks.Remove(cb);
+		}
+
+		// Register a type which holds generic parameters.
+		// These types must be known since it's information is lost during runtime
+		// when generic arguments were provided.
+		public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
+		{
+			Get()._declaringTypes.Add(typeHandle);
+			string message = String.Format("Registered parent generic type `{0}`", typeHandle.ToString());
+			Get().Internal_Log(message);
+		}
+
+		#endregion
+
+		#region LOGGING
 
 		public static void Log(string message)
 		{
@@ -118,46 +176,15 @@ namespace Hooks
 			throw new Exception("[HOOKER] Forced crash because of an error!");
 		}
 
+		#endregion
+
+		#region RUNTIME
+
 		// First function called by modified libraries.
 		// Return the response coming from the hook, because it's needed by the original library code   ! important
 		public static object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
 			return Get().Internal_OnCall(rmh, thisObj, args);
-		}
-
-		// Add a hook listener
-		public static void Register(Callback cb)
-		{
-			Get().callbacks.Add(cb);
-		}
-
-		public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
-		{
-			string message = String.Format("Registering parent generic type `{0}`", typeHandle.ToString());
-			Get().Internal_Log(message);
-			Get().declaringTypes.Add(typeHandle);
-		}
-
-		// Remove a hook listener
-		public static void Unregister(Callback cb)
-		{
-			Get().callbacks.Remove(cb);
-		}
-
-		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
-		void LoadRuntimeHooks()
-		{
-			foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
-			{
-				object[] hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
-				if (hooks != null && hooks.Length > 0)
-				{
-					// Store type.
-					knownHooks.Add(type);
-					// Initialise hook through default constructor.
-					type.GetConstructor(new Type[] { }).Invoke(new object[] { });
-				}
-			}
 		}
 
 		// Call each hook object and return it's response.
@@ -181,7 +208,7 @@ namespace Hooks
 			{
 				// Direct resolution of method definition doesn't work, probably because of generic parameters.
 				// We use the blueprints that were registered to try and decode this generic instantiated type.
-				foreach (RuntimeTypeHandle declHandle in declaringTypes)
+				foreach (RuntimeTypeHandle declHandle in _declaringTypes)
 				{
 
 					method = MethodBase.GetMethodFromHandle(rmh, declHandle);
@@ -208,7 +235,7 @@ namespace Hooks
 			Internal_Log(message);
 
 			// Execute each hook, because we don't know which one to actually target
-			foreach (Callback cb in callbacks)
+			foreach (Callback cb in _callbacks)
 			{
 				object o = cb(typeName, methodName, thisObj, args);
 				// If the hook did not return null, return it's response.
@@ -221,6 +248,8 @@ namespace Hooks
 			}
 			return null;
 		}
+
+		#endregion
 	}
 
 	[AttributeUsage(AttributeTargets.Class, Inherited = false)]

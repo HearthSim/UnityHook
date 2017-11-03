@@ -1,5 +1,7 @@
-﻿// This hook introduces additional code to dump each RECEIVED packet.
+// This hook introduces additional code to dump each RECEIVED packet.
 // The packet is caught from the communication stream between client and server.
+
+#if false
 
 using bgs;
 using HackstoneAnalyzer.PayloadFormat;
@@ -79,7 +81,7 @@ namespace Hooks
 				methodID = (int)header.MethodId;
 				serviceID = (int)header.ServiceId;
 
-				byte[] packetData = Serializer.SerializePacket(packet);
+				byte[] packetData = DumpServer.SerializePacket(packet);
 				dumper.SendPacket(PacketType.Battlenetpacket, PacketDirection.Incoming, 0, packetData);
 			}
 			else if (packetType.Equals(typeof(PegasusPacket)))
@@ -89,7 +91,7 @@ namespace Hooks
 				// Debug information
 				serviceID = packet.Type;
 
-				byte[] packetData = Serializer.SerializePacket(packet);
+				byte[] packetData = DumpServer.SerializePacket(packet);
 				dumper.SendPacket(PacketType.Pegasuspacket, PacketDirection.Incoming, 0, packetData);
 			}
 			else
@@ -136,3 +138,5 @@ namespace Hooks
 		}
 	}
 }
+
+#endif
