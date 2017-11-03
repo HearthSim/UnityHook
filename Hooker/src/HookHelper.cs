@@ -202,9 +202,20 @@ namespace Hooker
 						string libBackupPath = AssemblyHelper.GetPathBackup(libraryFilePath);
 						string libPatchedPath = AssemblyHelper.GetPathOut(libraryFilePath);
 
-						// Load the assembly file
-						AssemblyDefinition assembly = AssemblyHelper.LoadAssembly(libraryFilePath,
-																				  gameKnowledge.LibraryPath);
+						AssemblyDefinition assembly = null;
+						try
+						{
+							// Load the assembly file
+							assembly = AssemblyHelper.LoadAssembly(libraryFilePath, gameKnowledge.LibraryPath);
+						}
+						catch (BadImageFormatException e)
+						{
+							Program.Log.Warn("Library file is possibly encrypted!");
+							Program.Log.Info("Library skipped because it cannot be read.");
+							Program.Log.Debug("Full exception: {0}", e.Message);
+							continue;
+						}
+
 						if (assembly.HasPatchMark())
 						{
 							Program.Log.Warn(ASSEMBLY_ALREADY_PATCHED);
