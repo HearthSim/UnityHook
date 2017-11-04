@@ -1,3 +1,7 @@
+using bgs;
+using bnet.protocol;
+using Google.Protobuf;
+using Google.Protobuf.WellKnownTypes;
 using HackstoneAnalyzer.PayloadFormat;
 using System;
 using System.Collections.Generic;
@@ -5,12 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using Google.Protobuf;
-using Google.Protobuf.WellKnownTypes;
-using bgs;
-using bnet.protocol;
 using System.Reflection;
-using System.Linq;
 
 namespace Hooks.PacketDumper
 {
@@ -93,6 +92,8 @@ namespace Hooks.PacketDumper
 			_bufferLock = new object();
 
 			_partialStreamBuffers = new Map<object, StreamPartialData>();
+
+			Setup();
 		}
 
 		#region INIT
@@ -112,6 +113,7 @@ namespace Hooks.PacketDumper
 
 					string logMsg = String.Format("DumpServer - Listening on {0}:{1}", listenAddress, listenPort);
 					HookRegistry.Log(logMsg);
+					break;
 				}
 				catch (Exception) // TODO; Change to explicit exception
 				{
@@ -131,7 +133,7 @@ namespace Hooks.PacketDumper
 				}
 				catch (Exception e)
 				{
-					string message = String.Format("Dumpserver - Failed initialising handshake!\n{0}", e.Message);
+					string message = String.Format("Dumpserver - Failed initialising handshake; {0}", e.ToString());
 					HookRegistry.Panic(message);
 				}
 			}
@@ -151,8 +153,11 @@ namespace Hooks.PacketDumper
 			// This works because the return type is known (Int32) and the method body DOES NOT contain
 			// references to 'this'.
 			// 'null' is passed as 'this' parameter.
+			HookRegistry.Log("GOT versionMethod");
 			var actionMethod = (Func<int>)Delegate.CreateDelegate(typeof(Func<int>), null, versionMethod);
+			HookRegistry.Log("GOT delegate");
 			int supportedVersion = actionMethod();
+			HookRegistry.Log("GOT version int");
 			string hsVersion = supportedVersion.ToString();
 			/* END*/
 
@@ -351,10 +356,10 @@ namespace Hooks.PacketDumper
 
 		public void SendPartialData(object streamKey, bool incomingData, byte[] buffer, int offset, int count)
 		{
-			HookRegistry.Log(String.Format("offset: {0}, count: {1}", offset, count));
-			byte[] pickedSlice = new byte[count];
-			Buffer.BlockCopy(buffer, offset, pickedSlice, 0, count);
-			HookRegistry.Log(pickedSlice.ToHexString());
+			//HookRegistry.Log(String.Format("offset: {0}, count: {1}", offset, count));
+			//byte[] pickedSlice = new byte[count];
+			//Buffer.BlockCopy(buffer, offset, pickedSlice, 0, count);
+			//HookRegistry.Log(pickedSlice.ToHexString());
 
 			StreamPartialData meta;
 			_partialStreamBuffers.TryGetValue(streamKey, out meta);
@@ -399,17 +404,24 @@ namespace Hooks.PacketDumper
 						// of the object.
 						// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
 						byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
-						snapOffset += usedBytes;
 						lastComposedOffset = snapOffset + usedBytes;
+						snapOffset += usedBytes;
 
 						SendPacket(PacketType.Battlenetpacket, packetDirection, 0, packetBuffer);
 						packetsComposed++;
 					}
 				}
-				catch (NotImplementedException)
+				catch (Exception e)
 				{
-					// Exception thrown by the proto decode method.
-					// Just ignore it and continue with the next packet.
+					if (e is NotImplementedException || e is ProtocolBufferException)
+					{
+						// Exception thrown by the proto decode method.
+						// Just ignore it and continue with the next packet.
+					}
+					else
+					{
+						throw;
+					}
 				}
 
 				// PEG
@@ -431,17 +443,24 @@ namespace Hooks.PacketDumper
 						// of the object.
 						// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
 						byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
-						snapOffset += usedBytes;
 						lastComposedOffset = snapOffset + usedBytes;
+						snapOffset += usedBytes;
 
 						SendPacket(PacketType.Pegasuspacket, packetDirection, 0, packetBuffer);
 						packetsComposed++;
 					}
 				}
-				catch (NotImplementedException)
+				catch (Exception e)
 				{
-					// Exception thrown by the proto decode method.
-					// Just ignore it and continue with the next packet.
+					if (e is NotImplementedException || e is ProtocolBufferException)
+					{
+						// Exception thrown by the proto decode method.
+						// Just ignore it and continue with the next packet.
+					}
+					else
+					{
+						throw;
+					}
 				}
 
 				if (packetsComposed == 0)
@@ -461,13 +480,14 @@ namespace Hooks.PacketDumper
 
 			if (lastComposedOffset > 0)
 			{
+				HookRegistry.Log(String.Format("DumpServer - Constructed {0} packets", packetsComposed));
 				// Remove all bytes skipped by the offset acquired from composing packets. 
 				// This is done by an inplace block copy.
-				
+
 				// lastComposedOffset <= snapLength <= MS.Length!
 				int skippedBytes = lastComposedOffset;
 				int remainingBytes = (int)(activeBuffer.Length - lastComposedOffset);
-				
+
 				if (remainingBytes > 0)
 				{
 					byte[] directBuffer = activeBuffer.GetBuffer();
@@ -479,6 +499,8 @@ namespace Hooks.PacketDumper
 					// Reset buffer
 					activeBuffer.SetLength(0);
 				}
+
+				HookRegistry.Log(String.Format("DumpServer - ActiveBuffer size: {0}", activeBuffer.Length));
 			}
 		}
 
@@ -541,7 +563,7 @@ namespace Hooks.PacketDumper
 			var bodyBuffer = body as byte[];
 			if (bodyBuffer == null)
 			{
-				string message = string.Format("Body of this packet (`{0}`) is not a byte buffer!", body.GetType().Name);
+				string message = String.Format("Body of this packet (`{0}`) is not a byte buffer!", body.GetType().Name);
 				HookRegistry.Panic(message);
 			}
 

@@ -118,17 +118,29 @@ namespace Hooks
 			object OPresult = 0;
 
 			var asyncResult = args[0] as IAsyncResult;
+			// These variables have a different meaning depending on the operation; read or write.
 			byte[] buffer = GetAsyncBuffer(asyncResult);
+			// Offset in buffer where relevant data starts.
 			int offset = GetAsyncOffset(asyncResult);
+			// Amount of bytes encoding the relevant data (starting from offset).
 			int count = GetAsyncCount(asyncResult);
 
 			if (isWriting)
 			{
 				OPresult = ProxyEndWrite(thisObj, args);
+				// Buffer holds written data,
+				// offset holds offset within buffer where writing started,
+				// count holds amount of written bytes.
 			}
 			else
 			{
-				OPresult = ProxyEndRead(thisObj, args);
+				int readBytes = (int)ProxyEndRead(thisObj, args);
+				OPresult = readBytes;
+				// Buffer holds read data,
+				// offset holds offset within buffer where reading started,
+				// count holds size of buffer.
+
+				count = readBytes; // Reassigned
 			}
 
 			// We can assume the async operation succeeded.			
@@ -136,20 +148,21 @@ namespace Hooks
 			{
 				// Just start the dumpserver as a test.
 				var dumper = DumpServer.Get();
-				if (isWriting)
-				{
-					HookRegistry.Log(String.Format("SSLStream WRITE sending to dumper: ({0}, {1})", offset, count));
-				}
-				else
-				{
-					HookRegistry.Log(String.Format("SSLStream READ sending to dumper: ({0}, {1})", offset, count));
-				}
+				//if (isWriting)
+				//{
+				//	HookRegistry.Log(String.Format("SSLStream WRITE sending to dumper: ({0}, {1})", offset, count));
+				//}
+				//else
+				//{
+				//	HookRegistry.Log(String.Format("SSLStream READ sending to dumper: ({0}, {1})", offset, count));
+				//}
 
-				// dumper.SendPartialData(thisObj, !isWriting, buffer, offset, count);
+				// Offset is almost always 0.
+				dumper.SendPartialData(thisObj, !isWriting, buffer, offset, count);
 			}
 			else
 			{
-				HookRegistry.Log("Error trying to extract Buffer field from async operation!");
+				HookRegistry.Panic("Error trying to extract Buffer field from async operation!");
 			}
 
 			// Short circuit original method; this prevents executing the method twice.
