@@ -42,6 +42,9 @@ namespace Hooks.PacketDumper
 			public bool IgnoreRead;
 			public bool IgnoreWrite;
 
+			public readonly object ReadLock;
+			public readonly object WriteLock;
+
 			//public BattleNetPacket RecvBNETPacket { 
 			//	get => _recvBNETPacket ?? (_recvBNETPacket = new BattleNetPacket()); 
 			//	set => _recvBNETPacket = null;
@@ -72,6 +75,9 @@ namespace Hooks.PacketDumper
 
 				IgnoreRead = false;
 				IgnoreWrite = false;
+
+				ReadLock = new object();
+				WriteLock = new object();
 
 				//_recvBNETPacket = null;
 				//_sendBNETPacket = null;
@@ -144,24 +150,9 @@ namespace Hooks.PacketDumper
 		// After the handshake payload has been set, analyzers will be accepted.
 		private void InitialiseHandshake()
 		{
-			/* Following code is copied from HackstoneAnalyzer project */
-			System.Type hsInterface = typeof(Network).GetNestedType("HSClientInterface", BindingFlags.NonPublic);
-			// object hsInterfaceObject = Activator.CreateInstance(hsInterface, true);
-			MethodInfo versionMethod = hsInterface.GetMethod("GetApplicationVersion");
-			// This is the magic; A delegate straight into the method pointer has been constructed
-			// with minimal information.
-			// This works because the return type is known (Int32) and the method body DOES NOT contain
-			// references to 'this'.
-			// 'null' is passed as 'this' parameter.
-			HookRegistry.Log("GOT versionMethod");
-			var actionMethod = (Func<int>)Delegate.CreateDelegate(typeof(Func<int>), null, versionMethod);
-			HookRegistry.Log("GOT delegate");
-			int supportedVersion = actionMethod();
-			HookRegistry.Log("GOT version int");
-			string hsVersion = supportedVersion.ToString();
-			/* END*/
+			string hsVersion = BattleNet.Client().GetApplicationVersion().ToString();
 
-			HookRegistry.Log("DumpServer - Initialising handshake");
+			HookRegistry.Log(String.Format("DumpServer - Initialising handshake with HSVER {0}", hsVersion));
 			var handshake = new Handshake()
 			{
 				Magic = Util.MAGIC_V,
@@ -356,7 +347,7 @@ namespace Hooks.PacketDumper
 
 		public void SendPartialData(object streamKey, bool incomingData, byte[] buffer, int offset, int count)
 		{
-			//HookRegistry.Log(String.Format("offset: {0}, count: {1}", offset, count));
+			HookRegistry.Log(String.Format("offset: {0}, count: {1}", offset, count));
 			//byte[] pickedSlice = new byte[count];
 			//Buffer.BlockCopy(buffer, offset, pickedSlice, 0, count);
 			//HookRegistry.Log(pickedSlice.ToHexString());
@@ -369,138 +360,170 @@ namespace Hooks.PacketDumper
 				_partialStreamBuffers[streamKey] = meta;
 			}
 
+			object bufferLock = (incomingData) ? meta.ReadLock : meta.WriteLock;
 			PacketDirection packetDirection = (incomingData) ? PacketDirection.Incoming : PacketDirection.Outgoing;
 			int packetsComposed = 0;
 
-			MemoryStream activeBuffer = (incomingData) ? meta.RecvPartialBuffer : meta.SendPartialBuffer;
-			// Push new contents into the buffer.
-			activeBuffer.Write(buffer, offset, count);
-
-			/* Re-evaluate buffer for completed packets, which will be distributed by the dumpserver. */
-			byte[] bufferSnap = activeBuffer.ToArray();
-			int snapLength = bufferSnap.Length;
-			int snapOffset = 0;
-			int lastComposedOffset = 0;
-
-			// Keep looping to support all kinds of data fragmentation cases.
-			while (snapOffset < snapLength)
+			lock (bufferLock)
 			{
-				// BNET
-				try
+				MemoryStream activeBuffer = (incomingData) ? meta.RecvPartialBuffer : meta.SendPartialBuffer;
+				// Push new contents into the buffer.
+				activeBuffer.Write(buffer, offset, count);
+
+				/* Re-evaluate buffer for completed packets, which will be distributed by the dumpserver. */
+				byte[] bufferSnap = activeBuffer.GetBuffer();
+
+				int snapLength = (int)activeBuffer.Length;
+				int snapOffset = 0;
+				int lastComposedOffset = 0;
+				bool redo = true;
+
+				while (true)
 				{
 					while (snapOffset < snapLength)
 					{
-						var currentPacket = new BattleNetPacket();
-						int usedBytes = currentPacket.Decode(bufferSnap, snapOffset, (snapLength - snapOffset));
-
-						// We are only interested in complete packets, because we don't know much about the data
-						// being processed
-						if (!currentPacket.IsLoaded())
+						// BNET
+						try
 						{
-							break;
+							var currentPacket = new BattleNetPacket();
+							int usedBytes = currentPacket.Decode(bufferSnap, snapOffset, (snapLength - snapOffset));
+
+							// We are only interested in complete packets, because we don't know much about the data
+							// being processed.
+							if (!currentPacket.IsLoaded())
+							{
+								break;
+							}
+
+							// BodyHash can't be determined because we only have access to the encoded version
+							// of the object.
+							// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
+							byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
+							lastComposedOffset = snapOffset + usedBytes;
+							snapOffset += usedBytes;
+
+							SendPacket(PacketType.Battlenetpacket, packetDirection, 0, packetBuffer);
+							packetsComposed++;
 						}
-
-						// BodyHash can't be determined because we only have access to the encoded version
-						// of the object.
-						// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
-						byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
-						lastComposedOffset = snapOffset + usedBytes;
-						snapOffset += usedBytes;
-
-						SendPacket(PacketType.Battlenetpacket, packetDirection, 0, packetBuffer);
-						packetsComposed++;
+						catch (Exception e)
+						{
+							if (e is NotImplementedException || e is ProtocolBufferException)
+							{
+								// Exception thrown by the proto decode method.
+								// Just ignore it and continue with the next packet.
+							}
+							else
+							{
+								// There is an additional check; `header == null` which would throw an Exception object
+								// but that condition will never be met since the deserialization technique is in-object
+								// from stream.
+								// If they change the deserialization to `DeserializeLengthDelimited` that check could pass
+								// and throw an Exception object.
+								throw;
+							}
+						}
 					}
-				}
-				catch (Exception e)
-				{
-					if (e is NotImplementedException || e is ProtocolBufferException)
-					{
-						// Exception thrown by the proto decode method.
-						// Just ignore it and continue with the next packet.
-					}
-					else
-					{
-						throw;
-					}
-				}
 
-				// PEG
-				try
-				{
 					while (snapOffset < snapLength)
 					{
-						var currentPacket = new PegasusPacket();
-						int usedBytes = currentPacket.Decode(bufferSnap, snapOffset, (snapLength - snapOffset));
-
-						// We are only interested in complete packets, because we don't know much about the data
-						// being processed
-						if (!currentPacket.IsLoaded())
+						// PEG
+						try
 						{
-							break;
+							var currentPacket = new PegasusPacket();
+							int usedBytes = currentPacket.Decode(bufferSnap, snapOffset, (snapLength - snapOffset));
+
+							// We are only interested in complete packets, because we don't know much about the data
+							// being processed
+							if (!currentPacket.IsLoaded())
+							{
+								break;
+							}
+
+							// BodyHash can't be determined because we only have access to the encoded version
+							// of the object.
+							// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
+							byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
+							lastComposedOffset = snapOffset + usedBytes;
+							snapOffset += usedBytes;
+
+							SendPacket(PacketType.Pegasuspacket, packetDirection, 0, packetBuffer);
+							packetsComposed++;
 						}
+						catch (Exception e)
+						{
+							if (e is NotImplementedException || e is ProtocolBufferException)
+							{
+								// Exception thrown by the proto decode method.
+								// Just ignore it and continue with the next packet.
+							}
+							else if (e is OverflowException)
+							{
+								// https://msdn.microsoft.com/en-us/library/system.overflowexception(v=vs.110).aspx
+								// This exception is probably triggered by `newarr` operation.
 
-						// BodyHash can't be determined because we only have access to the encoded version
-						// of the object.
-						// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
-						byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
-						lastComposedOffset = snapOffset + usedBytes;
-						snapOffset += usedBytes;
+								// DEBUG
+								//int amount = (snapLength - snapOffset);
+								//byte[] pickedSlice = new byte[amount];
+								//Buffer.BlockCopy(bufferSnap, snapOffset, pickedSlice, 0, amount);
+								//HookRegistry.Log(pickedSlice.ToHexString());
 
-						SendPacket(PacketType.Pegasuspacket, packetDirection, 0, packetBuffer);
-						packetsComposed++;
+								HookRegistry.Log(String.Format("OVERFLOW; size={0}", activeBuffer.Length));
+
+								//throw;
+							}
+							else
+							{
+								throw;
+							}
+						}
 					}
-				}
-				catch (Exception e)
-				{
-					if (e is NotImplementedException || e is ProtocolBufferException)
+
+					if (packetsComposed == 0)
 					{
-						// Exception thrown by the proto decode method.
-						// Just ignore it and continue with the next packet.
+						/* 
+						 * 2 situations are possible;
+						 * Either the stream object has inserted padding for whatever reason (TLS handshaking).
+						 * The activebuffer holds no COMPLETE packet (fragmented body).
+						 */
+						if (!redo) break;
+						redo = false;
+
+						HookRegistry.Log(String.Format("DumpServer - SKIP 1 FOR RECONSTRUCTION {{{0}}}", bufferSnap[snapOffset].ToString("X2")));
+						// The naïve solution to both problems is to increase the offset until we find a new packet.
+						// With more knowledge this solution could be updated to be less CPU-hungry.
+						snapOffset++;
+
 					}
 					else
 					{
-						throw;
+						break;
 					}
 				}
 
-				if (packetsComposed == 0)
+				if (lastComposedOffset > 0)
 				{
-					/* 
-					 * 2 situations are possible;
-					 * Either the stream object has inserted padding for whatever reason (TLS handshaking).
-					 * The activebuffer holds no COMPLETE packet (fragmented body).
-					 */
+					HookRegistry.Log(String.Format("DumpServer - Constructed {0} packets", packetsComposed));
+					// Remove all bytes skipped by the offset acquired from composing packets. 
+					// This is done by an inplace block copy.
 
-					HookRegistry.Log("DumpServer - SKIP 1 FOR RECONSTRUCTION");
-					// The naïve solution to both problems is to increase the offset until we find a new packet.
-					// With more knowledge this solution could be updated to be less CPU-hungry.
-					snapOffset++;
+					// lastComposedOffset <= snapLength <= MS.Length!
+					int skippedBytes = lastComposedOffset;
+					int remainingBytes = (int)(activeBuffer.Length - lastComposedOffset);
+
+					if (remainingBytes > 0)
+					{
+						byte[] directBuffer = activeBuffer.GetBuffer();
+						Buffer.BlockCopy(directBuffer, skippedBytes, directBuffer, 0, remainingBytes);
+						activeBuffer.SetLength(activeBuffer.Length - snapOffset);
+					}
+					else
+					{
+						// Reset buffer
+						activeBuffer.SetLength(0);
+					}
+
+					HookRegistry.Log(String.Format("DumpServer - ActiveBuffer size: {0}", activeBuffer.Length));
 				}
-			}
-
-			if (lastComposedOffset > 0)
-			{
-				HookRegistry.Log(String.Format("DumpServer - Constructed {0} packets", packetsComposed));
-				// Remove all bytes skipped by the offset acquired from composing packets. 
-				// This is done by an inplace block copy.
-
-				// lastComposedOffset <= snapLength <= MS.Length!
-				int skippedBytes = lastComposedOffset;
-				int remainingBytes = (int)(activeBuffer.Length - lastComposedOffset);
-
-				if (remainingBytes > 0)
-				{
-					byte[] directBuffer = activeBuffer.GetBuffer();
-					Buffer.BlockCopy(directBuffer, skippedBytes, directBuffer, 0, remainingBytes);
-					activeBuffer.SetLength(activeBuffer.Length - snapOffset);
-				}
-				else
-				{
-					// Reset buffer
-					activeBuffer.SetLength(0);
-				}
-
-				HookRegistry.Log(String.Format("DumpServer - ActiveBuffer size: {0}", activeBuffer.Length));
 			}
 		}
 
