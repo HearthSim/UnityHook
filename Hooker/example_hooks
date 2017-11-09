@@ -25,7 +25,6 @@
 // The socket methods have multiple versions with different parameters!
 System.Net.Security.SslStream::EndWrite
 System.Net.Security.SslStream::EndRead
-// System.Net.Security.SslStream::Write(3)
 
-// System.Net.Sockets.Socket::BeginSend(6)
-// System.Net.Sockets.Socket::BeginReceive(6)
+System.Net.Sockets.Socket::EndSend
+System.Net.Sockets.Socket::EndReceive

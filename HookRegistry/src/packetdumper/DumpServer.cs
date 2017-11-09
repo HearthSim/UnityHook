@@ -10,7 +10,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 
 namespace Hooks.PacketDumper
 {
@@ -40,7 +39,7 @@ namespace Hooks.PacketDumper
 		// Ints are used to prevent cleanup of Socket objects.
 		private Map<int, StreamPartialData> _partialStreamBuffers;
 
-		private Stream _dbgOut;
+		// private Stream _dbgOut;
 
 		private class StreamPartialData
 		{
@@ -94,7 +93,9 @@ namespace Hooks.PacketDumper
 			}
 			private bool _hasDecodedPEG;
 
-			public StreamPartialData()
+			public readonly bool IgnoreWrappedCalls;
+
+			public StreamPartialData(bool ignoreWrappedCalls)
 			{
 				RecvPartialBuffer = new MemoryStream(0);
 				SendPartialBuffer = new MemoryStream(0);
@@ -105,6 +106,8 @@ namespace Hooks.PacketDumper
 				_isTypeDecided = false;
 				_hasDecodedBNET = false;
 				_hasDecodedPEG = false;
+
+				IgnoreWrappedCalls = ignoreWrappedCalls;
 			}
 		}
 
@@ -123,10 +126,10 @@ namespace Hooks.PacketDumper
 
 			_partialStreamBuffers = new Map<int, StreamPartialData>();
 
-			_dbgOut = File.OpenWrite("dbg_packets.hexdump");
-			// Truncate as well.
-			_dbgOut.SetLength(0);
-			_dbgOut.Flush();
+			//_dbgOut = File.OpenWrite("dbg_packets.hexdump");
+			//// Truncate as well.
+			//_dbgOut.SetLength(0);
+			//_dbgOut.Flush();
 
 			Setup();
 		}
@@ -146,8 +149,7 @@ namespace Hooks.PacketDumper
 				{
 					_connectionListener = new TcpListener(listenAddress, listenPort);
 
-					string logMsg = String.Format("DumpServer - Listening on {0}:{1}", listenAddress, listenPort);
-					HookRegistry.Log(logMsg);
+					HookRegistry.Log("DumpServer - Listening on {0}:{1}", listenAddress, listenPort);
 					break;
 				}
 				catch (Exception) // TODO; Change to explicit exception
@@ -180,7 +182,7 @@ namespace Hooks.PacketDumper
 		{
 			string hsVersion = BattleNet.Client().GetApplicationVersion().ToString();
 
-			HookRegistry.Log(String.Format("DumpServer - Initialising handshake with HSVER {0}", hsVersion));
+			HookRegistry.Log("DumpServer - Initialising handshake with HSVER {0}", hsVersion);
 			var handshake = new Handshake()
 			{
 				Magic = Util.MAGIC_V,
@@ -235,8 +237,7 @@ namespace Hooks.PacketDumper
 			}
 			catch (Exception e)
 			{
-				string message = String.Format("Connecting analyzer failed for following reason: {0}", e.Message);
-				HookRegistry.Log(message);
+				HookRegistry.Log("Connecting analyzer failed for following reason: {0}", e.Message);
 			}
 
 			if (client != null)
@@ -270,8 +271,7 @@ namespace Hooks.PacketDumper
 				}
 				catch (Exception e)
 				{
-					string message = String.Format("Sending BACKLOG to newly attached analyzer failed for following reason: {0}", e.Message);
-					HookRegistry.Log(message);
+					HookRegistry.Log("Sending BACKLOG to newly attached analyzer failed for following reason: {0}", e.Message);
 				}
 			}
 
@@ -349,8 +349,7 @@ namespace Hooks.PacketDumper
 				}
 				catch (Exception e)
 				{
-					string message = String.Format("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
-					HookRegistry.Log(message);
+					HookRegistry.Log("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
 					CleanSocket(connection);
 				}
 			}
@@ -367,8 +366,7 @@ namespace Hooks.PacketDumper
 			}
 			catch (Exception e)
 			{
-				string message = String.Format("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
-				HookRegistry.Log(message);
+				HookRegistry.Log("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
 				CleanSocket(client);
 			}
 		}
@@ -377,22 +375,49 @@ namespace Hooks.PacketDumper
 
 		#region DECOMPOSITION
 
-		public void SendPartialData(Socket socket, bool isIncomingData, byte[] buffer, int offset, int count)
+		// Data is only dumped if the data operation suceeded, which means the data comes in
+		// depth first.
+		// First we'll see raw socket data, afterwards (possibly) unobfuscated data from wrapping streams.
+		// To prevent recording garbage we prepare the memory object for each socket and tell it if we're 
+		// a wrapper or not.
+		public void PreparePartialBuffers(Socket socket, bool isWrapping)
+		{
+			int streamKey = socket.GetHashCode();
+			StreamPartialData meta;
+			_partialStreamBuffers.TryGetValue(streamKey, out meta);
+			if (meta == null)
+			{
+				meta = new StreamPartialData(isWrapping);
+				_partialStreamBuffers[streamKey] = meta;
+			}
+		}
+
+		// Copies the provided data into owned buffers.
+		// The buffers are inspected for game packets and transmitted to the analyzers (if listening).
+		// singleDecode is used to instruct the decoder loop to stop after succesfully decoding ONE packet, instead
+		// of trying to decode more packets afterwards.
+		public void PartialData(Socket socket, bool isIncomingData, byte[] buffer, int offset, int count, bool isWrapping, bool singleDecode = false)
 		{
 			if (_connectionListener == null) return;
 
-			byte[] seperator = new byte[] { 0xCC, 0x00, 0x00, 0x00, 0xCC };
-			_dbgOut.Write(buffer, offset, count);
-			_dbgOut.Write(seperator, 0, seperator.Length);
-			_dbgOut.Flush();
+			//byte[] seperator = new byte[] { 0xCC, 0x00, 0x00, 0x00, 0xCC };
+			//_dbgOut.Write(buffer, offset, count);
+			//_dbgOut.Write(seperator, 0, seperator.Length);
+			//_dbgOut.Flush();
 
 			int streamKey = socket.GetHashCode();
 			StreamPartialData meta;
 			_partialStreamBuffers.TryGetValue(streamKey, out meta);
 			if (meta == null)
 			{
-				meta = new StreamPartialData();
-				_partialStreamBuffers[streamKey] = meta;
+				HookRegistry.Panic("Provided key is not registered!");
+				return;
+			}
+
+			if (!isWrapping && meta.IgnoreWrappedCalls)
+			{
+				HookRegistry.Debug("{0} - ignoring data because of wrapping", streamKey);
+				return;
 			}
 
 			PacketDirection dataDirection = (isIncomingData) ? PacketDirection.Incoming : PacketDirection.Outgoing;
@@ -404,7 +429,7 @@ namespace Hooks.PacketDumper
 			bool typeNewlyDecided = false;
 			lock (bufferLock)
 			{
-				HookRegistry.Log(String.Format("{0} - Storing {1} bytes into buffer", socket.GetHashCode(), count));
+				HookRegistry.Debug("{0} - Storing {1}/{2} bytes into buffer", socket.GetHashCode(), count, buffer.Length);
 				correctStream.Write(buffer, offset, count);
 				// We suppose connection handshakes are always done by SENDING exactly ONE packet on the stream.
 				if (!meta.IsTypeDecided && isIncomingData == false)
@@ -417,11 +442,11 @@ namespace Hooks.PacketDumper
 				{
 					if (meta.HasDecodedBNET)
 					{
-						LoopDeserializeBNET(correctStream, dataDirection);
+						LoopDeserializeBNET(correctStream, dataDirection, false | singleDecode);
 					}
 					else if (meta.HasDecodedPEG)
 					{
-						LoopDeserializePEG(correctStream, dataDirection);
+						LoopDeserializePEG(correctStream, dataDirection, false | singleDecode);
 					}
 				}
 			}
@@ -430,7 +455,7 @@ namespace Hooks.PacketDumper
 			// be serialized.
 			if (meta.IsTypeDecided && typeNewlyDecided)
 			{
-				SendPartialData(socket, !isIncomingData, new byte[] { }, 0, 0);
+				PartialData(socket, !isIncomingData, new byte[] { }, 0, 0, isWrapping, singleDecode);
 			}
 		}
 
@@ -469,7 +494,7 @@ namespace Hooks.PacketDumper
 					}
 					else
 					{
-						HookRegistry.Log(String.Format("BNET decoded, but bytes left in buffer! {0} <=> {1}", usedBytes, availableBytes));
+						HookRegistry.Log("BNET decoded, but bytes left in buffer! {0} <=> {1}", usedBytes, availableBytes);
 					}
 				}
 			}
@@ -507,7 +532,7 @@ namespace Hooks.PacketDumper
 		/// <param name="skippedBytes"></param>
 		private void TrimMemoryStream(MemoryStream stream, int skippedBytes)
 		{
-			HookRegistry.Log(String.Format("Asked to trim off {0} bytes", skippedBytes));
+			HookRegistry.Debug("Asked to trim off {0} bytes", skippedBytes);
 
 			if (skippedBytes > stream.Length || skippedBytes < 1)
 			{
@@ -532,7 +557,7 @@ namespace Hooks.PacketDumper
 
 		#region DECOM_BNET
 
-		private void LoopDeserializeBNET(MemoryStream stream, PacketDirection direction)
+		private void LoopDeserializeBNET(MemoryStream stream, PacketDirection direction, bool singleRun)
 		{
 			int endComposedOffset = 0;
 			int packetsComposed = 0;
@@ -554,6 +579,8 @@ namespace Hooks.PacketDumper
 
 					endComposedOffset = dataOffset;
 					packetsComposed++;
+
+					if (singleRun == true) break;
 				}
 				else
 				{
@@ -566,7 +593,7 @@ namespace Hooks.PacketDumper
 				TrimMemoryStream(stream, endComposedOffset);
 			}
 
-			HookRegistry.Log(String.Format("DumpServer - Deserialized {0} BNET packets. {1} bytes left in buffer", packetsComposed, stream.Length));
+			HookRegistry.Debug("DumpServer - Deserialized {0} BNET packets. {1} bytes left in buffer", packetsComposed, stream.Length);
 		}
 
 		private BattleNetPacket DeserializeBNET(byte[] buffer, int offset, int count, out int usedBytes)
@@ -601,7 +628,7 @@ namespace Hooks.PacketDumper
 
 		#region DECOMP_PEG
 
-		private void LoopDeserializePEG(MemoryStream stream, PacketDirection direction)
+		private void LoopDeserializePEG(MemoryStream stream, PacketDirection direction, bool singleRun)
 		{
 			int endComposedOffset = 0;
 			int packetsComposed = 0;
@@ -624,6 +651,8 @@ namespace Hooks.PacketDumper
 
 					endComposedOffset = dataOffset;
 					packetsComposed++;
+
+					if (singleRun) break;
 				}
 				else
 				{
@@ -636,7 +665,7 @@ namespace Hooks.PacketDumper
 				TrimMemoryStream(stream, endComposedOffset);
 			}
 
-			HookRegistry.Log(String.Format("DumpServer - Deserialized {0} PEG packets. {1} bytes left in buffer", packetsComposed, stream.Length));
+			HookRegistry.Debug("DumpServer - Deserialized {0} PEG packets. {1} bytes left in buffer", packetsComposed, stream.Length);
 		}
 
 		private PegasusPacket DeserializePEG(byte[] buffer, int offset, int count, out int usedBytes, out uint bodyHash)

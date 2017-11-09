@@ -19,9 +19,18 @@ namespace Hooks
 {
 	public class HookRegistry
 	{
+		// If this file is present next to the game executable, hookregistry will print 
+		// debug messages to the game log.
+		const string DEBUG_ACTIVATION_FILENAME = "hr.debug";
+
 		// TRUE if the current execution context is invoked by Unity.
 		// FALSE if the current execution context is external to Unity.
-		private bool _IsWithinUnity = false;
+		private bool _isWithinUnity = false;
+
+		// TRUE if the registry should allow debug statements to be printed to the game log.
+		// FALSE otherwise.
+		// Activate debug mode by placing an (empty) file, named `hr.dbg`, next to the game executable.
+		private bool _debugEnabled = false;
 
 		// Method signature definition.
 		// This thing defines the needed structure for a certain function call.
@@ -59,7 +68,7 @@ namespace Hooks
 						_instance = new HookRegistry
 						{
 							// Test if we're running inside the unity player.
-							_IsWithinUnity = IsWithinUnity()
+							_isWithinUnity = IsWithinUnity()
 						};
 
 						_instance.Init();
@@ -81,9 +90,15 @@ namespace Hooks
 				string assemblyDirPath = Path.GetDirectoryName(assemblyPath);
 				// TODO: see if something needs to be done with the current directory.
 
-				if (_IsWithinUnity)
+				if (_isWithinUnity)
 				{
 					Internal_Log("Running inside Unity player, ALLOWING hooks");
+
+					_debugEnabled = File.Exists(DEBUG_ACTIVATION_FILENAME);
+					if (_debugEnabled)
+					{
+						Internal_Log("DEBUG messages will be printed!");
+					}
 
 					// Pre-load necessary library files.
 					ReferenceLoader.Load();
@@ -120,7 +135,6 @@ namespace Hooks
 		// Discover and store all HOOK classes, which have the [RuntimeHook] attribute.
 		void LoadRuntimeHooks()
 		{
-			Internal_Log("Enumerating all found hook types:");
 			foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
 			{
 				object[] hooks = type.GetCustomAttributes(typeof(RuntimeHookAttribute), false);
@@ -130,17 +144,17 @@ namespace Hooks
 					_knownHooks.Add(type);
 					// Initialise hook through default constructor.
 					type.GetConstructor(new Type[] { }).Invoke(new object[] { });
-					Internal_Log(type.Name);
 				}
 			}
+
+			Internal_Debug("Hook collection successfull; collected {0} hooks", _knownHooks.Count);
 		}
 
 		// Add a hook listener
 		public static void Register(Callback cb)
 		{
 			Get()._callbacks.Add(cb);
-			string message = String.Format("Registered callback; {0}", cb.Method.Name);
-			Get().Internal_Log(message);
+			// Get().Internal_Debug("Registered callback; {0}", cb.Method.Name);
 		}
 
 		// Remove a hook listener
@@ -155,27 +169,44 @@ namespace Hooks
 		public static void RegisterDeclaringType(RuntimeTypeHandle typeHandle)
 		{
 			Get()._declaringTypes.Add(typeHandle);
-			string message = String.Format("Registered parent generic type `{0}`", typeHandle.ToString());
-			Get().Internal_Log(message);
+			// Get().Internal_Debug("Registered parent generic type `{0}`", typeHandle.ToString());
 		}
 
 		#endregion
 
 		#region LOGGING
 
-		public static void Log(string message)
+		public static void Debug(string message, params object[] fills)
 		{
-			Get().Internal_Log(message);
+			Get().Internal_Debug(message, fills);
+		}
+
+		public void Internal_Debug(string message, params object[] fills)
+		{
+			if (_debugEnabled)
+			{
+				// Prepend `[DBG]` before the log message.
+				string preppedMessage = String.Format("[DBG]\t{0}", message);
+				Internal_Log(preppedMessage, fills);
+			}
+		}
+
+		public static void Log(string message, params object[] fills)
+		{
+			Get().Internal_Log(message, fills);
 		}
 
 		// Wrapper around the log method from unity.
 		// This method writes to the log file of the unity game.
-		public void Internal_Log(string message)
+		public void Internal_Log(string message, params object[] fills)
 		{
-			if (_IsWithinUnity)
+			if (_isWithinUnity)
 			{
-				// Create a nice format before printing to log
-				string logmessage = String.Format("[HOOKER]\t{0}", message);
+				// Replace message placeholders with actual data.
+				string preppedMessage = String.Format(message, fills);
+
+				// Prepend `[HOOKER]` before the actual log message.
+				string logmessage = String.Format("[HOOKER]\t{0}", preppedMessage);
 				UnityEngine.Debug.Log(logmessage);
 			}
 		}
@@ -184,9 +215,8 @@ namespace Hooks
 		// This is to make sure we don't break anything.
 		public static void Panic(string message = "")
 		{
-			string msg = String.Format("Forced crash because of error: `{0}` !", message);
 			// Push the message to the game log
-			Get().Internal_Log(msg);
+			Get().Internal_Log("Forced crash because of error: `{0}` !", message);
 
 			// Make the game crash!
 			throw new Exception("[HOOKER] Forced crash because of an error!");
@@ -209,7 +239,7 @@ namespace Hooks
 			// Without Unity Engine as context, we don't execute the hook.
 			// This is to prevent accidentally calling unity functions without the proper
 			// initialisation.
-			if (!_IsWithinUnity)
+			if (!_isWithinUnity)
 			{
 				return null;
 			}
@@ -244,11 +274,10 @@ namespace Hooks
 			string methodName = method.Name;
 			// TODO: replace with parameters of function.
 			string paramString = "..";
-			string message = String.Format("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
 			// Coming from UnityEngine.dll - UnityEngine.Debug.Log(..)
 			// This method prints into the game's debug log
-			Internal_Log(message);
+			Internal_Debug("Called by `{0}.{1}({2})`", typeName, methodName, paramString);
 
 			// Execute each hook, because we don't know which one to actually target
 			foreach (Callback cb in _callbacks)

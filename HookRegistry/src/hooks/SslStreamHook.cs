@@ -9,7 +9,7 @@ using System.Reflection;
 namespace Hooks
 {
 	[RuntimeHook]
-	class AsyncNetworkStreamHook
+	class SslStreamHook
 	{
 		private bool _reentrant;
 
@@ -21,7 +21,7 @@ namespace Hooks
 		private FieldInfo _innerStream;
 		private MethodInfo _networkSocket;
 
-		public AsyncNetworkStreamHook()
+		public SslStreamHook()
 		{
 			HookRegistry.Register(OnCall);
 			_reentrant = false;
@@ -74,8 +74,14 @@ namespace Hooks
 
 		public static string[] GetExpectedMethods()
 		{
-			return new string[] {"System.Net.Security.SslStream::EndWrite",
-				"System.Net.Security.SslStream::EndRead"};
+			return new string[] {
+				"System.Net.Security.SslStream::EndWrite",
+				"System.Net.Security.SslStream::EndRead",
+				// Synchronous methods call the asynchronous methods within the method body.
+				// It's not necessary to hook the read and write methods themselves.
+				// "System.Net.Security.SslStream::Read",
+				// "System.Net.Security.SslStream::Write",
+				};
 		}
 
 		#region PROXY
@@ -148,8 +154,9 @@ namespace Hooks
 
 			_reentrant = true;
 
-			bool isWriting = methodName.Equals("EndWrite");
-			object OPresult = 0;
+			bool isWriting = methodName.EndsWith("Write");
+			object OPresult = null;
+			var dumpServer = DumpServer.Get();
 
 			var asyncResult = args[0] as IAsyncResult;
 			// These variables have a different meaning depending on the operation; read or write.
@@ -160,6 +167,7 @@ namespace Hooks
 			int count = GetAsyncCount(asyncResult);
 
 			Socket underlyingSocket = GetUnderlyingSocket(thisObj);
+			dumpServer.PreparePartialBuffers(underlyingSocket, true);
 
 			if (isWriting)
 			{
@@ -182,12 +190,13 @@ namespace Hooks
 			// We can assume the async operation succeeded.			
 			if (buffer != null)
 			{
-				DumpServer.Get().SendPartialData(underlyingSocket, !isWriting, buffer, offset, count);
+				dumpServer.PartialData(underlyingSocket, !isWriting, buffer, offset, count, true);
 			}
 			else
 			{
 				HookRegistry.Panic("buffer == null!");
 			}
+
 
 			// Short circuit original method; this prevents executing the method twice.
 			_reentrant = false;
