@@ -3,6 +3,7 @@ using bnet.protocol;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using HackstoneAnalyzer.PayloadFormat;
+using Networking;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -31,58 +32,79 @@ namespace Hooks.PacketDumper
 		private MemoryStream _replayBuffer;
 		private object _bufferLock;
 
+		// Holds information about all Pegasus Packet type integers.
+		private PacketDecoderManager _pegPacketDecoder;
+
 		// Contains the buffers holding partial data during transmissions.
-		// The buffers are mapped by their stream instance.
-		private Map<object, StreamPartialData> _partialStreamBuffers;
+		// The buffers are mapped by their socket instance.
+		// Ints are used to prevent cleanup of Socket objects.
+		private Map<int, StreamPartialData> _partialStreamBuffers;
+
+		private Stream _dbgOut;
 
 		private class StreamPartialData
 		{
 			public readonly MemoryStream RecvPartialBuffer;
 			public readonly MemoryStream SendPartialBuffer;
-			public bool IgnoreRead;
-			public bool IgnoreWrite;
 
-			public readonly object ReadLock;
-			public readonly object WriteLock;
+			public readonly object RecvLock;
+			public readonly object SendLock;
 
-			//public BattleNetPacket RecvBNETPacket { 
-			//	get => _recvBNETPacket ?? (_recvBNETPacket = new BattleNetPacket()); 
-			//	set => _recvBNETPacket = null;
-			//}
-			//public BattleNetPacket SendBNETPacket {
-			//	get => _sendBNETPacket ?? (_sendBNETPacket = new BattleNetPacket());
-			//	set => _sendBNETPacket = null;
-			//}
-			//public PegasusPacket RecvPEGPacket {
-			//	get => _recvPEGPacket ?? (_recvPEGPacket = new PegasusPacket());
-			//	set => _recvPEGPacket = null;
-			//}
-			//public PegasusPacket SendPEGPacket {
-			//	get => _sendPEGPacket ?? (_sendPEGPacket = new PegasusPacket());
-			//	set => _sendPEGPacket = null;
-			//}
+			/* Streams are mutually exclusive for ONE kind of packets ONLY! */
+			public bool IsTypeDecided
+			{
+				get => _isTypeDecided;
+				set => _isTypeDecided = true;
+			}
+			private bool _isTypeDecided;
 
-			//private BattleNetPacket _recvBNETPacket;
-			//private BattleNetPacket _sendBNETPacket;
+			public bool HasDecodedBNET
+			{
+				get => _hasDecodedBNET;
+				set
+				{
+					if (_isTypeDecided)
+					{
+						HookRegistry.Panic("Second packet type registered on stream!");
+					}
+					else
+					{
+						_hasDecodedBNET = true;
+						_isTypeDecided = true;
+					}
+				}
+			}
+			private bool _hasDecodedBNET;
 
-			//private PegasusPacket _recvPEGPacket;
-			//private PegasusPacket _sendPEGPacket;
+			public bool HasDecodedPEG
+			{
+				get => _hasDecodedPEG;
+				set
+				{
+					if (_isTypeDecided)
+					{
+						HookRegistry.Panic("Second packet type registered on stream!");
+					}
+					else
+					{
+						_hasDecodedPEG = true;
+						_isTypeDecided = true;
+					}
+				}
+			}
+			private bool _hasDecodedPEG;
 
 			public StreamPartialData()
 			{
-				RecvPartialBuffer = new MemoryStream();
-				SendPartialBuffer = new MemoryStream();
+				RecvPartialBuffer = new MemoryStream(0);
+				SendPartialBuffer = new MemoryStream(0);
 
-				IgnoreRead = false;
-				IgnoreWrite = false;
+				RecvLock = new object();
+				SendLock = new object();
 
-				ReadLock = new object();
-				WriteLock = new object();
-
-				//_recvBNETPacket = null;
-				//_sendBNETPacket = null;
-				//_recvPEGPacket = null;
-				//_sendPEGPacket = null;
+				_isTypeDecided = false;
+				_hasDecodedBNET = false;
+				_hasDecodedPEG = false;
 			}
 		}
 
@@ -97,7 +119,14 @@ namespace Hooks.PacketDumper
 			_replayBuffer = new MemoryStream();
 			_bufferLock = new object();
 
-			_partialStreamBuffers = new Map<object, StreamPartialData>();
+			_pegPacketDecoder = new PacketDecoderManager(false);
+
+			_partialStreamBuffers = new Map<int, StreamPartialData>();
+
+			_dbgOut = File.OpenWrite("dbg_packets.hexdump");
+			// Truncate as well.
+			_dbgOut.SetLength(0);
+			_dbgOut.Flush();
 
 			Setup();
 		}
@@ -143,7 +172,6 @@ namespace Hooks.PacketDumper
 					HookRegistry.Panic(message);
 				}
 			}
-
 		}
 
 		// Constructs the handshake payload.
@@ -276,19 +304,23 @@ namespace Hooks.PacketDumper
 		// Store packet to be sent to all attached analyzers.
 		// Packets are only sent IF the InitialiseHandshake(..) has been called.
 		// It's allowed to 'send' packets before the handshake is initialised.
-		public void SendPacket(PacketType type, PacketDirection direction, uint bodyTypeHash, byte[] data)
+		public void SendPacket(PacketType type, PacketDirection direction, uint bodyTypeHash, byte[] data, int offset = 0, int count = -1)
 		{
 			// Disable the dump mechanism when the server is not running.
 			if (_connectionListener == null) return;
 
-			HookRegistry.Log("Packet HIT!");
+			// If count was not provided, set it to the length of the entire buffer.
+			if (count < 0)
+			{
+				count = data.Length;
+			}
 
 			// Construct new payload to send.
 			var packet = new CapturedPacket()
 			{
 				Type = type,
 				Direction = direction,
-				Data = ByteString.CopyFrom(data, 0, data.Length),
+				Data = ByteString.CopyFrom(data, offset, count),
 				BodyTypeHash = bodyTypeHash,
 				PassedSeconds = Duration.FromTimeSpan(_timeWatch.Elapsed)
 			};
@@ -345,13 +377,16 @@ namespace Hooks.PacketDumper
 
 		#region DECOMPOSITION
 
-		public void SendPartialData(object streamKey, bool incomingData, byte[] buffer, int offset, int count)
+		public void SendPartialData(Socket socket, bool isIncomingData, byte[] buffer, int offset, int count)
 		{
-			HookRegistry.Log(String.Format("offset: {0}, count: {1}", offset, count));
-			//byte[] pickedSlice = new byte[count];
-			//Buffer.BlockCopy(buffer, offset, pickedSlice, 0, count);
-			//HookRegistry.Log(pickedSlice.ToHexString());
+			if (_connectionListener == null) return;
 
+			byte[] seperator = new byte[] { 0xCC, 0x00, 0x00, 0x00, 0xCC };
+			_dbgOut.Write(buffer, offset, count);
+			_dbgOut.Write(seperator, 0, seperator.Length);
+			_dbgOut.Flush();
+
+			int streamKey = socket.GetHashCode();
 			StreamPartialData meta;
 			_partialStreamBuffers.TryGetValue(streamKey, out meta);
 			if (meta == null)
@@ -360,171 +395,296 @@ namespace Hooks.PacketDumper
 				_partialStreamBuffers[streamKey] = meta;
 			}
 
-			object bufferLock = (incomingData) ? meta.ReadLock : meta.WriteLock;
-			PacketDirection packetDirection = (incomingData) ? PacketDirection.Incoming : PacketDirection.Outgoing;
-			int packetsComposed = 0;
+			PacketDirection dataDirection = (isIncomingData) ? PacketDirection.Incoming : PacketDirection.Outgoing;
 
+			// Store new data into correct buffer.
+			object bufferLock = (isIncomingData) ? meta.RecvLock : meta.SendLock;
+			MemoryStream correctStream = (isIncomingData) ? meta.RecvPartialBuffer : meta.SendPartialBuffer;
+
+			bool typeNewlyDecided = false;
 			lock (bufferLock)
 			{
-				MemoryStream activeBuffer = (incomingData) ? meta.RecvPartialBuffer : meta.SendPartialBuffer;
-				// Push new contents into the buffer.
-				activeBuffer.Write(buffer, offset, count);
-
-				/* Re-evaluate buffer for completed packets, which will be distributed by the dumpserver. */
-				byte[] bufferSnap = activeBuffer.GetBuffer();
-
-				int snapLength = (int)activeBuffer.Length;
-				int snapOffset = 0;
-				int lastComposedOffset = 0;
-				bool redo = true;
-
-				while (true)
+				HookRegistry.Log(String.Format("{0} - Storing {1} bytes into buffer", socket.GetHashCode(), count));
+				correctStream.Write(buffer, offset, count);
+				// We suppose connection handshakes are always done by SENDING exactly ONE packet on the stream.
+				if (!meta.IsTypeDecided && isIncomingData == false)
 				{
-					while (snapOffset < snapLength)
-					{
-						// BNET
-						try
-						{
-							var currentPacket = new BattleNetPacket();
-							int usedBytes = currentPacket.Decode(bufferSnap, snapOffset, (snapLength - snapOffset));
-
-							// We are only interested in complete packets, because we don't know much about the data
-							// being processed.
-							if (!currentPacket.IsLoaded())
-							{
-								break;
-							}
-
-							// BodyHash can't be determined because we only have access to the encoded version
-							// of the object.
-							// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
-							byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
-							lastComposedOffset = snapOffset + usedBytes;
-							snapOffset += usedBytes;
-
-							SendPacket(PacketType.Battlenetpacket, packetDirection, 0, packetBuffer);
-							packetsComposed++;
-						}
-						catch (Exception e)
-						{
-							if (e is NotImplementedException || e is ProtocolBufferException)
-							{
-								// Exception thrown by the proto decode method.
-								// Just ignore it and continue with the next packet.
-							}
-							else
-							{
-								// There is an additional check; `header == null` which would throw an Exception object
-								// but that condition will never be met since the deserialization technique is in-object
-								// from stream.
-								// If they change the deserialization to `DeserializeLengthDelimited` that check could pass
-								// and throw an Exception object.
-								throw;
-							}
-						}
-					}
-
-					while (snapOffset < snapLength)
-					{
-						// PEG
-						try
-						{
-							var currentPacket = new PegasusPacket();
-							int usedBytes = currentPacket.Decode(bufferSnap, snapOffset, (snapLength - snapOffset));
-
-							// We are only interested in complete packets, because we don't know much about the data
-							// being processed
-							if (!currentPacket.IsLoaded())
-							{
-								break;
-							}
-
-							// BodyHash can't be determined because we only have access to the encoded version
-							// of the object.
-							// uint bodyHash = Util.GenerateHashFromObjectType(currentPacket.GetBody());
-							byte[] packetBuffer = bufferSnap.Slice(snapOffset, snapOffset + usedBytes);
-							lastComposedOffset = snapOffset + usedBytes;
-							snapOffset += usedBytes;
-
-							SendPacket(PacketType.Pegasuspacket, packetDirection, 0, packetBuffer);
-							packetsComposed++;
-						}
-						catch (Exception e)
-						{
-							if (e is NotImplementedException || e is ProtocolBufferException)
-							{
-								// Exception thrown by the proto decode method.
-								// Just ignore it and continue with the next packet.
-							}
-							else if (e is OverflowException)
-							{
-								// https://msdn.microsoft.com/en-us/library/system.overflowexception(v=vs.110).aspx
-								// This exception is probably triggered by `newarr` operation.
-
-								// DEBUG
-								//int amount = (snapLength - snapOffset);
-								//byte[] pickedSlice = new byte[amount];
-								//Buffer.BlockCopy(bufferSnap, snapOffset, pickedSlice, 0, amount);
-								//HookRegistry.Log(pickedSlice.ToHexString());
-
-								HookRegistry.Log(String.Format("OVERFLOW; size={0}", activeBuffer.Length));
-
-								//throw;
-							}
-							else
-							{
-								throw;
-							}
-						}
-					}
-
-					if (packetsComposed == 0)
-					{
-						/* 
-						 * 2 situations are possible;
-						 * Either the stream object has inserted padding for whatever reason (TLS handshaking).
-						 * The activebuffer holds no COMPLETE packet (fragmented body).
-						 */
-						if (!redo) break;
-						redo = false;
-
-						HookRegistry.Log(String.Format("DumpServer - SKIP 1 FOR RECONSTRUCTION {{{0}}}", bufferSnap[snapOffset].ToString("X2")));
-						// The naïve solution to both problems is to increase the offset until we find a new packet.
-						// With more knowledge this solution could be updated to be less CPU-hungry.
-						snapOffset++;
-
-					}
-					else
-					{
-						break;
-					}
+					DecideStreamPacketType(socket, meta);
+					typeNewlyDecided = true;
 				}
 
-				if (lastComposedOffset > 0)
+				if (meta.IsTypeDecided)
 				{
-					HookRegistry.Log(String.Format("DumpServer - Constructed {0} packets", packetsComposed));
-					// Remove all bytes skipped by the offset acquired from composing packets. 
-					// This is done by an inplace block copy.
-
-					// lastComposedOffset <= snapLength <= MS.Length!
-					int skippedBytes = lastComposedOffset;
-					int remainingBytes = (int)(activeBuffer.Length - lastComposedOffset);
-
-					if (remainingBytes > 0)
+					if (meta.HasDecodedBNET)
 					{
-						byte[] directBuffer = activeBuffer.GetBuffer();
-						Buffer.BlockCopy(directBuffer, skippedBytes, directBuffer, 0, remainingBytes);
-						activeBuffer.SetLength(activeBuffer.Length - snapOffset);
+						LoopDeserializeBNET(correctStream, dataDirection);
 					}
-					else
+					else if (meta.HasDecodedPEG)
 					{
-						// Reset buffer
-						activeBuffer.SetLength(0);
+						LoopDeserializePEG(correctStream, dataDirection);
 					}
-
-					HookRegistry.Log(String.Format("DumpServer - ActiveBuffer size: {0}", activeBuffer.Length));
 				}
 			}
+
+			// If the type was newly decided it's possible that packets in the opposite direction are waiting to
+			// be serialized.
+			if (meta.IsTypeDecided && typeNewlyDecided)
+			{
+				SendPartialData(socket, !isIncomingData, new byte[] { }, 0, 0);
+			}
+		}
+
+		private void DecideStreamPacketType(Socket socket, StreamPartialData meta, PacketDirection dataDirection = PacketDirection.Outgoing)
+		{
+			int usedBytes;
+			uint bodyHash;
+
+			MemoryStream correctStream = (dataDirection == PacketDirection.Incoming) ? meta.RecvPartialBuffer : meta.SendPartialBuffer;
+			byte[] buffer = correctStream.GetBuffer();
+			int availableBytes = (int)correctStream.Length;
+			int offset = 0;
+
+			if (buffer.Length < availableBytes)
+			{
+				HookRegistry.Panic("Buffer is not big enough to satisfy availablebytes!");
+			}
+
+			/* 
+			 * Try decoding as BNET packet 
+			 * 
+			 * Decode 1 packet from the provided data.
+			 * The type is succesfully decided when there is NO data left after reconstructing one packet in this buffer!
+			 */
+			try
+			{
+				var currentPacket = new BattleNetPacket();
+				usedBytes = currentPacket.Decode(buffer, offset, availableBytes);
+
+				if (currentPacket.IsLoaded())
+				{
+					if (usedBytes == availableBytes)
+					{
+						meta.HasDecodedBNET = true;
+						return;
+					}
+					else
+					{
+						HookRegistry.Log(String.Format("BNET decoded, but bytes left in buffer! {0} <=> {1}", usedBytes, availableBytes));
+					}
+				}
+			}
+			catch (Exception)
+			{
+				// Do nothing.
+			}
+
+			/* 
+			 * Try decoding as PEG packet
+			 * 
+			 */
+			PegasusPacket pegPacket = DeserializePEG(buffer, offset, availableBytes, out usedBytes, out bodyHash);
+			if (pegPacket != null)
+			{
+				if (usedBytes == availableBytes)
+				{
+					meta.HasDecodedPEG = true;
+					return;
+				}
+				else
+				{
+					HookRegistry.Log("PEG decoded, but bytes left in buffer!");
+				}
+			}
+
+			HookRegistry.Panic("Couldn't find out which packets are transmitted on this socket!");
+		}
+
+		/// <summary>
+		/// Remove all bytes skipped, because these were already processed.
+		/// The unprocessed bytes will be block copied to the front of the stream.
+		/// </summary>
+		/// <param name="stream"></param>
+		/// <param name="skippedBytes"></param>
+		private void TrimMemoryStream(MemoryStream stream, int skippedBytes)
+		{
+			HookRegistry.Log(String.Format("Asked to trim off {0} bytes", skippedBytes));
+
+			if (skippedBytes > stream.Length || skippedBytes < 1)
+			{
+				HookRegistry.Panic("Cannot skip more bytes than available inside the memory stream!");
+			}
+
+			int remainingBytes = (int)(stream.Length - skippedBytes);
+			if (remainingBytes > 0)
+			{
+				byte[] directBuffer = stream.GetBuffer();
+				Buffer.BlockCopy(directBuffer, skippedBytes, directBuffer, 0, remainingBytes);
+				stream.SetLength(remainingBytes);
+			}
+			else
+			{
+				// Reset buffer to empty
+				stream.SetLength(0);
+			}
+		}
+
+		#endregion
+
+		#region DECOM_BNET
+
+		private void LoopDeserializeBNET(MemoryStream stream, PacketDirection direction)
+		{
+			int endComposedOffset = 0;
+			int packetsComposed = 0;
+
+			byte[] dataBuffer = stream.GetBuffer();
+			int dataOffset = 0;
+			int bufferSize = (int)stream.Length;
+
+			while (dataOffset < bufferSize)
+			{
+				int availableData = bufferSize - dataOffset;
+
+				int usedBytes;
+				BattleNetPacket bnetPacket = DeserializeBNET(dataBuffer, dataOffset, availableData, out usedBytes);
+				if (bnetPacket != null)
+				{
+					SendPacket(PacketType.Battlenetpacket, direction, 0, dataBuffer, dataOffset, usedBytes);
+					dataOffset += usedBytes;
+
+					endComposedOffset = dataOffset;
+					packetsComposed++;
+				}
+				else
+				{
+					break;
+				}
+			}
+
+			if (packetsComposed > 0 && endComposedOffset > 0)
+			{
+				TrimMemoryStream(stream, endComposedOffset);
+			}
+
+			HookRegistry.Log(String.Format("DumpServer - Deserialized {0} BNET packets. {1} bytes left in buffer", packetsComposed, stream.Length));
+		}
+
+		private BattleNetPacket DeserializeBNET(byte[] buffer, int offset, int count, out int usedBytes)
+		{
+			usedBytes = 0;
+
+			int availableBytes = count;
+			try
+			{
+				var currentPacket = new BattleNetPacket();
+				usedBytes = currentPacket.Decode(buffer, offset, availableBytes);
+
+				if (currentPacket.IsLoaded())
+				{
+					// Currently there are no checks possible to verify decoding was successful!
+					// **Reported header size VS header serialized size DOES NOT work, the deserialize method 
+					// **from SilentOrbit is broken.
+					return currentPacket;
+				}
+			}
+#pragma warning disable CS0168 // Variable is declared but never used
+			catch (Exception e)
+			{
+				// HookRegistry.Log(String.Format("Exception while decoding BNET packet:\n{0}", e.ToString()));
+			}
+#pragma warning restore CS0168 // Variable is declared but never used
+
+			return null;
+		}
+
+		#endregion
+
+		#region DECOMP_PEG
+
+		private void LoopDeserializePEG(MemoryStream stream, PacketDirection direction)
+		{
+			int endComposedOffset = 0;
+			int packetsComposed = 0;
+
+			byte[] dataBuffer = stream.GetBuffer();
+			int dataOffset = 0;
+			int bufferSize = (int)stream.Length;
+
+			while (dataOffset < bufferSize)
+			{
+				int availableData = bufferSize - dataOffset;
+
+				int usedBytes;
+				uint bodyHash;
+				PegasusPacket pegPacket = DeserializePEG(dataBuffer, dataOffset, availableData, out usedBytes, out bodyHash);
+				if (pegPacket != null)
+				{
+					SendPacket(PacketType.Pegasuspacket, direction, bodyHash, dataBuffer, dataOffset, usedBytes);
+					dataOffset += usedBytes;
+
+					endComposedOffset = dataOffset;
+					packetsComposed++;
+				}
+				else
+				{
+					break;
+				}
+			}
+
+			if (packetsComposed > 0 && endComposedOffset > 0)
+			{
+				TrimMemoryStream(stream, endComposedOffset);
+			}
+
+			HookRegistry.Log(String.Format("DumpServer - Deserialized {0} PEG packets. {1} bytes left in buffer", packetsComposed, stream.Length));
+		}
+
+		private PegasusPacket DeserializePEG(byte[] buffer, int offset, int count, out int usedBytes, out uint bodyHash)
+		{
+			usedBytes = 0;
+			bodyHash = 0;
+
+			try
+			{
+				var currentPacket = new PegasusPacket();
+
+				int availableBytes = count;
+				usedBytes = currentPacket.Decode(buffer, offset, availableBytes);
+
+				if (currentPacket.IsLoaded())
+				{
+					if (!_pegPacketDecoder.CanDecodePacket(currentPacket.Type))
+					{
+						// Deserialize byte buffer (body) back into a ProtoBuf object.
+						// This is an additional false positive prevention barrier and 
+						// allows it's hash to be formulated.
+						PegasusPacket decodedPacket = _pegPacketDecoder.DecodePacket(currentPacket);
+						if (decodedPacket == null)
+						{
+							// Error occurred during reconstruction of the pegasus packet.
+							return null;
+						}
+						else
+						{
+							// If succesfully deserialized we can generate a hash from the packet contents.
+							bodyHash = Util.GenerateHashFromObjectType(decodedPacket.GetBody());
+							return currentPacket;
+						}
+					}
+					else
+					{
+						HookRegistry.Log("PEG decoded, but bytes left in buffer!");
+					}
+				}
+			}
+#pragma warning disable CS0168 // Variable is declared but never used
+			catch (Exception e)
+			{
+				// HookRegistry.Log(String.Format("Exception while decoding PEG packet:\n{0}", e.ToString()));
+			}
+#pragma warning restore CS0168 // Variable is declared but never used
+
+			return null;
 		}
 
 		#endregion

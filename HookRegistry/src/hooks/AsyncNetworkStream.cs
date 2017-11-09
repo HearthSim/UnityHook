@@ -1,13 +1,15 @@
 using Hooks.PacketDumper;
 using Mono.Security.Protocol.Tls;
 using System;
+using System.IO;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Reflection;
 
 namespace Hooks
 {
 	[RuntimeHook]
-	class SslStreamHook
+	class AsyncNetworkStreamHook
 	{
 		private bool _reentrant;
 
@@ -16,7 +18,10 @@ namespace Hooks
 		private MethodInfo _asyncModelOffset;
 		private MethodInfo _asyncModelCount;
 
-		public SslStreamHook()
+		private FieldInfo _innerStream;
+		private MethodInfo _networkSocket;
+
+		public AsyncNetworkStreamHook()
 		{
 			HookRegistry.Register(OnCall);
 			_reentrant = false;
@@ -29,29 +34,40 @@ namespace Hooks
 		{
 			if (HookRegistry.IsWithinUnity())
 			{
+				_innerStream = typeof(AuthenticatedStream).GetField("innerStream", BindingFlags.Instance | BindingFlags.NonPublic);
+				if (_innerStream == null)
+				{
+					HookRegistry.Panic("innerStream == null");
+				}
+
+				_networkSocket = typeof(NetworkStream).GetProperty("Socket", BindingFlags.Instance | BindingFlags.NonPublic)?.GetGetMethod(true);
+				if (_networkSocket == null)
+				{
+					HookRegistry.Panic("networkSocket == null");
+				}
+
 				_asyncOPModel = typeof(SslStreamBase).GetNestedType("InternalAsyncResult", BindingFlags.NonPublic);
 				_asyncModelBuffer = _asyncOPModel.GetProperty("Buffer")?.GetGetMethod();
 				_asyncModelOffset = _asyncOPModel.GetProperty("Offset")?.GetGetMethod();
 				_asyncModelCount = _asyncOPModel.GetProperty("Count")?.GetGetMethod();
-
 				if (_asyncOPModel == null)
 				{
-					HookRegistry.Log("asyncOPModel == null!");
+					HookRegistry.Panic("asyncOPModel == null!");
 				}
 
 				if (_asyncModelBuffer == null)
 				{
-					HookRegistry.Log("asyncModelBuffer == null!");
+					HookRegistry.Panic("asyncModelBuffer == null!");
 				}
 
 				if (_asyncModelOffset == null)
 				{
-					HookRegistry.Log("asyncModelOffset == null!");
+					HookRegistry.Panic("asyncModelOffset == null!");
 				}
 
 				if (_asyncModelCount == null)
 				{
-					HookRegistry.Log("asyncModelCount == null!");
+					HookRegistry.Panic("asyncModelCount == null!");
 				}
 			}
 		}
@@ -74,6 +90,24 @@ namespace Hooks
 		{
 			MethodInfo readMethod = typeof(SslStream).GetMethod("EndRead");
 			return readMethod.Invoke(stream, args);
+		}
+
+		private Socket GetUnderlyingSocket(object stream)
+		{
+			var baseStream = (Stream)_innerStream.GetValue(stream);
+			var netStream = baseStream as NetworkStream;
+			if (netStream == null)
+			{
+				HookRegistry.Panic("Underlying stream is NOT a network stream!");
+			}
+
+			var underlyingSocket = (Socket)_networkSocket.Invoke(netStream, new object[0] { });
+			if (underlyingSocket == null)
+			{
+				HookRegistry.Panic("Couldn't find underlying socket!");
+			}
+
+			return underlyingSocket;
 		}
 
 		#endregion
@@ -125,6 +159,8 @@ namespace Hooks
 			// Amount of bytes encoding the relevant data (starting from offset).
 			int count = GetAsyncCount(asyncResult);
 
+			Socket underlyingSocket = GetUnderlyingSocket(thisObj);
+
 			if (isWriting)
 			{
 				OPresult = ProxyEndWrite(thisObj, args);
@@ -146,23 +182,11 @@ namespace Hooks
 			// We can assume the async operation succeeded.			
 			if (buffer != null)
 			{
-				// Just start the dumpserver as a test.
-				var dumper = DumpServer.Get();
-				//if (isWriting)
-				//{
-				//	HookRegistry.Log(String.Format("SSLStream WRITE sending to dumper: ({0}, {1})", offset, count));
-				//}
-				//else
-				//{
-				//	HookRegistry.Log(String.Format("SSLStream READ sending to dumper: ({0}, {1})", offset, count));
-				//}
-
-				// Offset is almost always 0.
-				dumper.SendPartialData(thisObj, !isWriting, buffer, offset, count);
+				DumpServer.Get().SendPartialData(underlyingSocket, !isWriting, buffer, offset, count);
 			}
 			else
 			{
-				HookRegistry.Panic("Error trying to extract Buffer field from async operation!");
+				HookRegistry.Panic("buffer == null!");
 			}
 
 			// Short circuit original method; this prevents executing the method twice.

@@ -43,41 +43,57 @@ namespace Hooks
 		public Type[] KnownHooks => _knownHooks.ToArray();
 
 		#region INIT
-
 		private static HookRegistry _instance;
+		private static object _initLock = new object();
+		private bool _isInitialised = false;
 
 		public static HookRegistry Get()
 		{
 			if (_instance == null)
 			{
-				_instance = new HookRegistry();
-				// Initialise the assembly store.
-				_instance.Init();
-
-				// Test if we're running inside the unity player.
-				_instance._IsWithinUnity = IsWithinUnity();
-				if (_instance._IsWithinUnity)
+				lock (_initLock)
 				{
-					_instance.Internal_Log("Running inside Unity player, ALLOWING hooks");
+					// We need a double check because hooking async methods can cause race issues.
+					if (_instance == null)
+					{
+						_instance = new HookRegistry
+						{
+							// Test if we're running inside the unity player.
+							_IsWithinUnity = IsWithinUnity()
+						};
+
+						_instance.Init();
+					}
 				}
-
-				// Pre-load necessary library files.
-				ReferenceLoader.Load();
-
-				// Setup all hook information.
-				_instance.LoadRuntimeHooks();
 			}
+
 			return _instance;
 		}
 
 		private void Init()
 		{
-			// All necessary libraries should be next to this assembly file.
-			// GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
-			// it will return the location of the Assembly DOING the incovation!
-			string assemblyPath = Assembly.GetExecutingAssembly().Location;
-			string assemblyDirPath = Path.GetDirectoryName(assemblyPath);
-			// TODO: see if something needs to be done with the current directory.
+			if (!_isInitialised)
+			{
+				// All necessary libraries should be next to this assembly file.
+				// GetExecutingAssembly does not always give the desired effect. In case of dynamic invocation
+				// it will return the location of the Assembly DOING the incovation!
+				string assemblyPath = Assembly.GetExecutingAssembly().Location;
+				string assemblyDirPath = Path.GetDirectoryName(assemblyPath);
+				// TODO: see if something needs to be done with the current directory.
+
+				if (_IsWithinUnity)
+				{
+					Internal_Log("Running inside Unity player, ALLOWING hooks");
+
+					// Pre-load necessary library files.
+					ReferenceLoader.Load();
+
+					// Setup all hook information.
+					LoadRuntimeHooks();
+				}
+			}
+
+			_isInitialised = true;
 		}
 
 		// Method that tests the execution context for the presence of an initialized Unity framework.
@@ -188,7 +204,7 @@ namespace Hooks
 		}
 
 		// Call each hook object and return it's response.
-		object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
+		private object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
 			// Without Unity Engine as context, we don't execute the hook.
 			// This is to prevent accidentally calling unity functions without the proper
