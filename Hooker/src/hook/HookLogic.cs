@@ -18,14 +18,16 @@ namespace Hooker.Hook
 		public const string HOOK_PROBLEM = "A problem occurred while hooking `{0}`: {1}\n" +
 										   "Hooking will continue!";
 
-		// The library to hook
+		// The library to hook.
 		public ModuleDefinition Module
 		{
 			get;
 			private set;
 		}
-		// Method that gets called when entering a hooked method
+		// Method that gets called when entering a hooked method.
 		private MethodReference onCallMethodRef;
+		// method that gets called when entering a hooked method, with memory pointer recording.
+		private MethodReference onCallMethodExtendedRef;
 
 		private HookLogic()
 		{
@@ -42,13 +44,21 @@ namespace Hooker.Hook
 			// Fetch types and references
 			TypeDefinition _hookRegistryType = options.HookRegistryTypeBlueprint;
 			// Look for the HookRegistry.onCall(..) method
-			MethodDefinition onCallMethod = _hookRegistryType.Methods.First(mi => mi.Name.Equals("OnCall"));
+			IEnumerable<MethodDefinition> onCallMethods = _hookRegistryType.Methods.Where(mi => mi.Name.Equals("OnCall"));
+
+			// Default form
+			MethodDefinition onCallMethod = onCallMethods.First();
 			MethodReference onCallMethodRef = module.Import(onCallMethod);
+
+			// Extended form
+			MethodDefinition onCallMethodExtended = onCallMethods.ElementAt(1);
+			MethodReference onCallMethodExtendedRef = module.Import(onCallMethodExtended);
 
 			var newObj = new HookLogic
 			{
 				Module = module,
 				onCallMethodRef = onCallMethodRef,
+				onCallMethodExtendedRef = onCallMethodExtendedRef,
 			};
 
 			return newObj;
@@ -58,9 +68,9 @@ namespace Hooker.Hook
 		{
 			// Get all types from the Module that match the given typeName.
 			// A type is selected if the predicate, inside the lambda definition, returns true.
-			var matchingTypes = Module.Types.Where(t =>
+			IEnumerable<TypeDefinition> matchingTypes = Module.Types.Where(t =>
 			{
-				var idx = t.FullName.IndexOf(typeName);
+				int idx = t.FullName.IndexOf(typeName);
 				// This one is clever!
 				//      - Return false if no match was found
 				//      - Return true IF one of the next is true:
@@ -81,11 +91,12 @@ namespace Hooker.Hook
 			foreach (TypeDefinition type in matchingTypes)
 			{
 				// This time look for an EXACT match with methodName
-				foreach (var method in type.Methods.Where(m => m.Name.Equals(methodName)))
+				IEnumerable<MethodDefinition> methodMatches = type.Methods.Where(m => m.Name.Equals(methodName));
+				foreach (MethodDefinition method in methodMatches)
 				{
 					try
 					{
-						var methodFullname = method.DeclaringType.FullName + HooksFileParser.METHOD_SPLIT + method.Name;
+						string methodFullname = method.DeclaringType.FullName + HooksFileParser.METHOD_SPLIT + method.Name;
 						// WARN because no hookregistry expects this method to be hooked
 						if (expectedMethods.FirstOrDefault(m => m.Equals(methodFullname)) == null)
 						{
@@ -156,7 +167,7 @@ namespace Hooker.Hook
 			}
 
 			// Construct method from generic arguments
-			
+
 
 			// The following occurs in the body of the selected method              !important
 			// The method body is a set of instructions executed by the runtime.
@@ -176,18 +187,50 @@ namespace Hooker.Hook
 
 			// object[] interceptedArgs;
 			// object hookResult;
+			// void*[] referenceArgs;
+			// int[] referenceMatchArgs;
 			var interceptedArgs = new VariableDefinition("interceptedArgs",
-														 method.Module.TypeSystem.Object.MakeArrayType());
+															method.Module.TypeSystem.Object.MakeArrayType());
 			var hookResult = new VariableDefinition("hookResult", method.Module.TypeSystem.Object);
+			// IntPtr types are supposed to be native int pointers => portable
+			var referenceArgs = new VariableDefinition("referenceArgs",
+															method.Module.TypeSystem.Void.MakePointerType().MakeArrayType());
+			var refMatchArgs = new VariableDefinition("referenceMatchArgs",
+															method.Module.TypeSystem.Int32.MakeArrayType());
 
+			int numArgs = method.Parameters.Count;
+			ParameterDefinition[] refArgs = method.Parameters
+				.Where(p => p.IsOut || p.ParameterType.IsByReference).ToArray();
+			int numRefArgs = refArgs.Length;
+
+			/* Assign new variables to method */
 			method.Body.Variables.Add(interceptedArgs);
 			method.Body.Variables.Add(hookResult);
-			var numArgs = method.Parameters.Count;
+
+			if (numRefArgs > 0)
+			{
+				method.Body.Variables.Add(referenceArgs);
+				method.Body.Variables.Add(refMatchArgs);
+			}
+
 			var hook = new List<Instruction>();
 			// interceptedArgs = new object[numArgs];
 			hook.Add(Instruction.Create(OpCodes.Ldc_I4, numArgs));
-			hook.Add(Instruction.Create(OpCodes.Newarr, Module.TypeSystem.Object));
+			hook.Add(Instruction.Create(OpCodes.Newarr, method.Module.TypeSystem.Object));
 			hook.Add(Instruction.Create(OpCodes.Stloc, interceptedArgs));
+
+			if (numRefArgs > 0)
+			{
+				// referenceArgs = new void*[numRefArgs];
+				hook.Add(Instruction.Create(OpCodes.Ldc_I4, numRefArgs));
+				hook.Add(Instruction.Create(OpCodes.Newarr, method.Module.TypeSystem.Void.MakePointerType()));
+				hook.Add(Instruction.Create(OpCodes.Stloc, referenceArgs));
+
+				// referenceMatchArgs = new int[numRefArgs];
+				hook.Add(Instruction.Create(OpCodes.Ldc_I4, numRefArgs));
+				hook.Add(Instruction.Create(OpCodes.Newarr, method.Module.TypeSystem.Int32));
+				hook.Add(Instruction.Create(OpCodes.Stloc, refMatchArgs));
+			}
 
 			// rmh = methodof([this method]).MethodHandle;
 			hook.Add(Instruction.Create(OpCodes.Ldtoken, method));
@@ -202,33 +245,111 @@ namespace Hooker.Hook
 				hook.Add(Instruction.Create(OpCodes.Ldnull));
 			}
 
-			var i = 0;
-			foreach (var param in method.Parameters)
+			int paramIdx = 0;
+			int refParamIdx = 0;
+			foreach (ParameterDefinition param in method.Parameters)
 			{
-				// interceptedArgs[i] = (object)arg;
+				// Load interceptedArgs array on stack
 				hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
-				hook.Add(Instruction.Create(OpCodes.Ldc_I4, i));
+				// Load index matching argument offset onto stack.
+				hook.Add(Instruction.Create(OpCodes.Ldc_I4, paramIdx));
+				// Load the argument onto the stack.
 				hook.Add(Instruction.Create(OpCodes.Ldarg, param));
-				if (param.ParameterType.IsByReference)
+
+				/* 
+                 * The intention is now to edit the stack so the next operation 
+                 * simply pushes a reference to the argument into the interceptedArgs
+                 * array.
+                 * This is done by using the stelem.ref OPCODE. -> This means that any 
+                 * argument must be boxed, which means it becomes a descendant of object
+                 * and is allocated on the HEAP!
+                 */
+
+				if (param.IsOut)
 				{
-					/// if the arg is a reference type, it must be copied and boxed
+					/// The parameter is annotated with out.
+
+					/// Store a native pointer to the out argument for later use.
+					hook.Add(Instruction.Create(OpCodes.Ldloc, referenceArgs));
+					// Load the correct parameter offset for reference variables.
+					hook.Add(Instruction.Create(OpCodes.Ldc_I4, refParamIdx));
+					hook.Add(Instruction.Create(OpCodes.Ldarg, param));
+					hook.Add(Instruction.Create(OpCodes.Conv_I));
+					hook.Add(Instruction.Create(OpCodes.Stelem_I));
+
+					/// Also save the offset into the full argument array for later use.
+					hook.Add(Instruction.Create(OpCodes.Ldloc, refMatchArgs));
+					hook.Add(Instruction.Create(OpCodes.Ldc_I4, refParamIdx));
+					hook.Add(Instruction.Create(OpCodes.Ldc_I4, paramIdx));
+					hook.Add(Instruction.Create(OpCodes.Stelem_I4));
+
+					/// Box the pointed to memory so we can have some type information
+					/// within our hooks. This doesn't work if the pointed to memory is null!
+					if (param.ParameterType.IsByReference)
+					{
+						var refType = (ByReferenceType)param.ParameterType;
+						hook.Add(Instruction.Create(OpCodes.Ldobj, refType.ElementType));
+						hook.Add(Instruction.Create(OpCodes.Box, refType.ElementType));
+					}
+					/// Value types are allocated on stack so they ALWAYS have a default value!
+					else if (param.ParameterType.IsValueType)
+					{
+						hook.Add(Instruction.Create(OpCodes.Box, param.ParameterType));
+					}
+
+				}
+				else if (param.ParameterType.IsByReference)
+				{
+					/// if the parameter is annotated with ref.
+
+					/// Store a native pointer to the out argument for later use.
+					hook.Add(Instruction.Create(OpCodes.Ldloc, referenceArgs));
+					// Load the correct parameter offset for reference variables.
+					hook.Add(Instruction.Create(OpCodes.Ldc_I4, refParamIdx));
+					hook.Add(Instruction.Create(OpCodes.Ldarg, param));
+					hook.Add(Instruction.Create(OpCodes.Conv_I));
+					hook.Add(Instruction.Create(OpCodes.Stelem_I));
+
+					/// Also save the offset into the full argument array for later use.
+					hook.Add(Instruction.Create(OpCodes.Ldloc, refMatchArgs));
+					hook.Add(Instruction.Create(OpCodes.Ldc_I4, refParamIdx));
+					hook.Add(Instruction.Create(OpCodes.Ldc_I4, paramIdx));
+					hook.Add(Instruction.Create(OpCodes.Stelem_I4));
+
+					/// The referenced argument is copied and boxed.
 					var refType = (ByReferenceType)param.ParameterType;
 					hook.Add(Instruction.Create(OpCodes.Ldobj, refType.ElementType));
 					hook.Add(Instruction.Create(OpCodes.Box, refType.ElementType));
 				}
 				else if (param.ParameterType.IsValueType)
 				{
-					/// if the arg descends from ValueType, it must be boxed to be
-					/// converted to an object:
+					/// if the parameter descends from ValueType, it must be boxed to be
+					/// converted to an object.
 					hook.Add(Instruction.Create(OpCodes.Box, param.ParameterType));
 				}
+
+				// interceptedArgs[i] = (object)arg_i;
 				hook.Add(Instruction.Create(OpCodes.Stelem_Ref));
-				i++;
+				paramIdx++;
 			}
-			// hookResult = HookRegistry.OnCall(rmh, thisObj, interceptedArgs);
-			hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
-			hook.Add(Instruction.Create(OpCodes.Call, onCallMethodRef));
-			hook.Add(Instruction.Create(OpCodes.Stloc, hookResult));
+
+			if (numRefArgs > 0)
+			{
+				// hookResult = HookRegistry.OnCall(rmh, thisObj, interceptedArgs, referenceArgs, referenceMatchArgs);
+				hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
+				hook.Add(Instruction.Create(OpCodes.Ldloc, referenceArgs));
+				hook.Add(Instruction.Create(OpCodes.Ldloc, refMatchArgs));
+				hook.Add(Instruction.Create(OpCodes.Call, onCallMethodExtendedRef));
+				hook.Add(Instruction.Create(OpCodes.Stloc, hookResult));
+			}
+			else
+			{
+				// hookResult = HookRegistry.OnCall(rmh, thisObj, interceptedArgs);
+				hook.Add(Instruction.Create(OpCodes.Ldloc, interceptedArgs));
+				hook.Add(Instruction.Create(OpCodes.Call, onCallMethodRef));
+				hook.Add(Instruction.Create(OpCodes.Stloc, hookResult));
+			}
+
 			// if (hookResult != null) {
 			//     return (ReturnType)hookResult;
 			// }
@@ -245,7 +366,7 @@ namespace Hooker.Hook
 			hook.Add(Instruction.Create(OpCodes.Ret));
 
 			hook.Reverse();
-			foreach (var inst in hook)
+			foreach (Instruction inst in hook)
 			{
 				method.Body.Instructions.Insert(0, inst);
 			}

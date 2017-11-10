@@ -25,7 +25,7 @@ namespace Hooks
 			return new string[] { };
 		}
 
-		object OnCall(string typeName, string methodName, object thisObj, object[] args)
+		object OnCall(string typeName, string methodName, object thisObj, object[] args, IntPtr[] refArgs, int[] refIdxMatch)
 		{
 			return null;
 		}

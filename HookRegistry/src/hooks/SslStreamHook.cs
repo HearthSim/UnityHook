@@ -137,7 +137,7 @@ namespace Hooks
 
 		#endregion
 
-		object OnCall(string typeName, string methodName, object thisObj, object[] args)
+		object OnCall(string typeName, string methodName, object thisObj, object[] args, IntPtr[] refArgs, int[] refIdxMatch)
 		{
 			if (typeName != "System.Net.Security.SslStream" ||
 				(methodName != "EndWrite" && methodName != "EndRead"))
@@ -157,14 +157,7 @@ namespace Hooks
 			bool isWriting = methodName.EndsWith("Write");
 			object OPresult = null;
 			var dumpServer = DumpServer.Get();
-
-			var asyncResult = args[0] as IAsyncResult;
-			// These variables have a different meaning depending on the operation; read or write.
-			byte[] buffer = GetAsyncBuffer(asyncResult);
-			// Offset in buffer where relevant data starts.
-			int offset = GetAsyncOffset(asyncResult);
-			// Amount of bytes encoding the relevant data (starting from offset).
-			int count = GetAsyncCount(asyncResult);
+			int readBytes = -1;
 
 			Socket underlyingSocket = GetUnderlyingSocket(thisObj);
 			dumpServer.PreparePartialBuffers(underlyingSocket, true);
@@ -178,13 +171,30 @@ namespace Hooks
 			}
 			else
 			{
-				int readBytes = (int)ProxyEndRead(thisObj, args);
+				readBytes = (int)ProxyEndRead(thisObj, args);
 				OPresult = readBytes;
 				// Buffer holds read data,
 				// offset holds offset within buffer where reading started,
 				// count holds size of buffer.
 
-				count = readBytes; // Reassigned
+				//count = readBytes; // Reassigned
+			}
+
+			var asyncResult = args[0] as IAsyncResult;
+			if(asyncResult == null)
+			{
+				HookRegistry.Panic("SslStreamHook - asyncResult == null");
+			}
+			// These variables have a different meaning depending on the operation; read or write.
+			byte[] buffer = GetAsyncBuffer(asyncResult);
+			// Offset in buffer where relevant data starts.
+			int offset = GetAsyncOffset(asyncResult);
+			// Amount of bytes encoding the relevant data (starting from offset).
+			int count = GetAsyncCount(asyncResult);
+
+			if (!isWriting)
+			{
+				count = readBytes;
 			}
 
 			// We can assume the async operation succeeded.			

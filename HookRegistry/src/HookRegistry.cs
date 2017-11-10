@@ -36,7 +36,7 @@ namespace Hooks
 		// This thing defines the needed structure for a certain function call.
 		// In our case it's the signature of a onCall(..) function defined in each hook class.
 		public delegate object Callback(string typeName, string methodName, object thisObj,
-										object[] args);
+										object[] args, IntPtr[] refArgs, int[] refIdxMatch);
 
 		// All callback functions registered to with this object
 		private List<Callback> _callbacks = new List<Callback>();
@@ -230,11 +230,24 @@ namespace Hooks
 		// Return the response coming from the hook, because it's needed by the original library code   ! important
 		public static object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
 		{
-			return Get().Internal_OnCall(rmh, thisObj, args);
+			return Get().Internal_OnCall(rmh, thisObj, args, null, null);
+		}
+
+		// First function called by modified libraries.
+		// This method additionally accepts arrays containing pointers of memory location which must be written to.
+		// eg: memory pointed to by `ref` and `out` keywords.
+		public static unsafe object OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args, void*[] refArgs, int[] refArgMatch)
+		{
+			IntPtr[] managedPtrs = new IntPtr[refArgs.Length];
+			for (int i = 0; i < refArgs.Length; ++i)
+			{
+				managedPtrs[i] = (IntPtr)refArgs[i];
+			}
+			return Get().Internal_OnCall(rmh, thisObj, args, managedPtrs, refArgMatch);
 		}
 
 		// Call each hook object and return it's response.
-		private object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args)
+		private object Internal_OnCall(RuntimeMethodHandle rmh, object thisObj, object[] args, IntPtr[] refArgs, int[] refArgMatch)
 		{
 			// Without Unity Engine as context, we don't execute the hook.
 			// This is to prevent accidentally calling unity functions without the proper
@@ -282,7 +295,7 @@ namespace Hooks
 			// Execute each hook, because we don't know which one to actually target
 			foreach (Callback cb in _callbacks)
 			{
-				object o = cb(typeName, methodName, thisObj, args);
+				object o = cb(typeName, methodName, thisObj, args, refArgs, refArgMatch);
 				// If the hook did not return null, return it's response.
 				// This test explicitly ends the enclosing FOR loop, so hooks that were
 				// not executed yet will not run.

@@ -508,7 +508,7 @@ namespace Hooks.PacketDumper
 				return;
 			}
 
-			if(meta.DoIgnore) return;
+			if (meta.DoIgnore) return;
 
 			// Skip unwrapped data because it might be obfuscated.
 			if (!isWrapping && meta.ConnectionIsWrapped)
@@ -527,7 +527,18 @@ namespace Hooks.PacketDumper
 			lock (bufferLock)
 			{
 				HookRegistry.Debug("DumpServer - {0} - Storing {1}/{2} bytes into buffer", socket.GetHashCode(), count, buffer.Length);
-				correctStream.Write(buffer, offset, count);
+				try
+				{
+					correctStream.Write(buffer, offset, count);
+				}
+				catch (ArgumentOutOfRangeException)
+				{
+					string message = String.Format("Offset: {0}, count: {1}, buffSize: {2}", offset, count, buffer.Length);
+					HookRegistry.Panic(message);
+
+					throw;
+				}
+
 				// We suppose connection handshakes are always done by SENDING exactly ONE packet on the stream.
 				if (!meta.IsTypeDecided && isIncomingData == false)
 				{
