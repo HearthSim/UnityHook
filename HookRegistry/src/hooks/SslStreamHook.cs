@@ -37,13 +37,13 @@ namespace Hooks
 				_innerStream = typeof(AuthenticatedStream).GetField("innerStream", BindingFlags.Instance | BindingFlags.NonPublic);
 				if (_innerStream == null)
 				{
-					HookRegistry.Panic("innerStream == null");
+					HookRegistry.Panic("SslStreamHook - innerStream == null");
 				}
 
 				_networkSocket = typeof(NetworkStream).GetProperty("Socket", BindingFlags.Instance | BindingFlags.NonPublic)?.GetGetMethod(true);
 				if (_networkSocket == null)
 				{
-					HookRegistry.Panic("networkSocket == null");
+					HookRegistry.Panic("SslStreamHook - networkSocket == null");
 				}
 
 				_asyncOPModel = typeof(SslStreamBase).GetNestedType("InternalAsyncResult", BindingFlags.NonPublic);
@@ -52,22 +52,22 @@ namespace Hooks
 				_asyncModelCount = _asyncOPModel.GetProperty("Count")?.GetGetMethod();
 				if (_asyncOPModel == null)
 				{
-					HookRegistry.Panic("asyncOPModel == null!");
+					HookRegistry.Panic("SslStreamHook - asyncOPModel == null!");
 				}
 
 				if (_asyncModelBuffer == null)
 				{
-					HookRegistry.Panic("asyncModelBuffer == null!");
+					HookRegistry.Panic("SslStreamHook - asyncModelBuffer == null!");
 				}
 
 				if (_asyncModelOffset == null)
 				{
-					HookRegistry.Panic("asyncModelOffset == null!");
+					HookRegistry.Panic("SslStreamHook - asyncModelOffset == null!");
 				}
 
 				if (_asyncModelCount == null)
 				{
-					HookRegistry.Panic("asyncModelCount == null!");
+					HookRegistry.Panic("SslStreamHook - asyncModelCount == null!");
 				}
 			}
 		}
@@ -104,13 +104,13 @@ namespace Hooks
 			var netStream = baseStream as NetworkStream;
 			if (netStream == null)
 			{
-				HookRegistry.Panic("Underlying stream is NOT a network stream!");
+				HookRegistry.Panic("SslStreamHook - Underlying stream is NOT a network stream!");
 			}
 
 			var underlyingSocket = (Socket)_networkSocket.Invoke(netStream, new object[0] { });
 			if (underlyingSocket == null)
 			{
-				HookRegistry.Panic("Couldn't find underlying socket!");
+				HookRegistry.Panic("SslStreamHook - Couldn't find underlying socket!");
 			}
 
 			return underlyingSocket;
@@ -194,7 +194,7 @@ namespace Hooks
 			}
 			else
 			{
-				HookRegistry.Panic("buffer == null!");
+				HookRegistry.Debug("SslStreamHook - {0} - buffer == null!", underlyingSocket.GetHashCode());
 			}
 
 

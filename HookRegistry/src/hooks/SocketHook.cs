@@ -35,22 +35,22 @@ namespace Hooks
 				_asyncModelRequestedBytes = _asyncOPModel.GetField("Size", BindingFlags.Instance | BindingFlags.Public);
 				if (_asyncOPModel == null)
 				{
-					HookRegistry.Panic("asyncOPModel == null!");
+					HookRegistry.Panic("SocketHook - asyncOPModel == null!");
 				}
 
 				if (_asyncModelBuffer == null)
 				{
-					HookRegistry.Panic("asyncModelBuffer == null!");
+					HookRegistry.Panic("SocketHook - asyncModelBuffer == null!");
 				}
 
 				if (_asyncModelOffset == null)
 				{
-					HookRegistry.Panic("asyncModelOffset == null!");
+					HookRegistry.Panic("SocketHook - asyncModelOffset == null!");
 				}
 
 				if (_asyncModelRequestedBytes == null)
 				{
-					HookRegistry.Panic("asyncModelRequestedBytes == null!");
+					HookRegistry.Panic("SocketHook - asyncModelRequestedBytes == null!");
 				}
 			}
 		}
@@ -126,7 +126,7 @@ namespace Hooks
 
 			_reentrant = true;
 
-			bool isWriting = methodName.EndsWith("Send");
+			bool isOutgoing = methodName.EndsWith("Send");
 			object OPResult = null;
 			var dumpServer = DumpServer.Get();
 
@@ -142,16 +142,28 @@ namespace Hooks
 			var thisSocket = thisObj as Socket;
 			if (thisSocket == null)
 			{
-				HookRegistry.Panic("`thisObj` is NOT a Socket object");
+				HookRegistry.Panic("SocketHook - `thisObj` is NOT a Socket object");
 			}
 
 			dumpServer.PreparePartialBuffers(thisSocket, false);
 
-			if (isWriting)
+			if (isOutgoing)
 			{
 				int sentBytes = (int)ProxyEndWrite(thisObj, args);
+
+				// buffer holds the transmitted contents.
+				// requestedBytes holds the amount of bytes requested when starting the operation.
+				//	=> This amount gets decreased, towards 0, each time bytes are sent.
+				//	=> The actual amount of bytes sent are found inside sentBytes.
+				// offset is the starting offset, within buffer, of data to be written when starting
+				// the operation.
+				//	=> This amount gets increased, towards orignal value of size, each time bytes are sent.
+				//	=> The actual offset would then be (offset-sentBytes)!
+
 				OPResult = sentBytes;
 				processedBytes = sentBytes;
+				// Update offset parameter.
+				offset = offset-sentBytes;
 			}
 			else
 			{
@@ -162,12 +174,12 @@ namespace Hooks
 
 			if (buffer != null)
 			{
-				HookRegistry.Log("Offset: {0}, buffsize: {1}, element: {2}", offset, buffer.Length, processedBytes);
-				dumpServer.PartialData(thisSocket, !isWriting, buffer, offset, processedBytes, false);
+				// HookRegistry.Log("Offset: {0}, buffsize: {1}, element: {2}", offset, buffer.Length, processedBytes);
+				dumpServer.PartialData(thisSocket, !isOutgoing, buffer, offset, processedBytes, false);
 			}
 			else
 			{
-				HookRegistry.Panic("buffer == null");
+				HookRegistry.Debug("SocketHook - {0} - buffer == null", thisSocket.GetHashCode());
 			}
 
 

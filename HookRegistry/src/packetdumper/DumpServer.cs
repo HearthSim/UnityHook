@@ -43,13 +43,31 @@ namespace Hooks.PacketDumper
 
 		private class StreamPartialData
 		{
+			// Buffer for holding (partial) data received by the game.
 			public readonly MemoryStream RecvPartialBuffer;
+			// Buffer for holding (partial) data transmitted by the game.
 			public readonly MemoryStream SendPartialBuffer;
 
+			// Lock which must be aqcuired before operating on RecvPartialBuffer.
 			public readonly object RecvLock;
+			// Lock which must be aqcuired before operating on SendPartialBuffer.
 			public readonly object SendLock;
 
+			// True if we gave up on dumping data from this stream, false otherwise.
+			public bool DoIgnore
+			{
+				get => _doIgnore;
+				set
+				{
+					_doIgnore = true;
+				}
+			}
+
+			private bool _doIgnore;
+			private int _detectionTries;
+
 			/* Streams are mutually exclusive for ONE kind of packets ONLY! */
+			// True if the packet type transmitted on this stream is known, false otherwise.
 			public bool IsTypeDecided
 			{
 				get => _isTypeDecided;
@@ -57,6 +75,7 @@ namespace Hooks.PacketDumper
 			}
 			private bool _isTypeDecided;
 
+			// True if BNET packets were detected on this stream, false otherwise.
 			public bool HasDecodedBNET
 			{
 				get => _hasDecodedBNET;
@@ -64,7 +83,7 @@ namespace Hooks.PacketDumper
 				{
 					if (_isTypeDecided)
 					{
-						HookRegistry.Panic("Second packet type registered on stream!");
+						HookRegistry.Panic("DumpServer - Second packet type registered on stream!");
 					}
 					else
 					{
@@ -75,6 +94,7 @@ namespace Hooks.PacketDumper
 			}
 			private bool _hasDecodedBNET;
 
+			// True if PEG packets were detected on this stream, false otherwise.
 			public bool HasDecodedPEG
 			{
 				get => _hasDecodedPEG;
@@ -82,7 +102,7 @@ namespace Hooks.PacketDumper
 				{
 					if (_isTypeDecided)
 					{
-						HookRegistry.Panic("Second packet type registered on stream!");
+						HookRegistry.Panic("DumpServer - Second packet type registered on stream!");
 					}
 					else
 					{
@@ -93,12 +113,21 @@ namespace Hooks.PacketDumper
 			}
 			private bool _hasDecodedPEG;
 
-			public readonly bool IgnoreWrappedCalls;
+			// True if the representing connection (read: socket) got wrapped by an abstracting object,
+			// false otherwise.
+			// eg: Socket is hooked, which dumps all raw bytes. SslStream is hooked, which dumps the 
+			// bytes BEFORE they got encrypted. => We want to dump data from the wrapping object (SslStream)
+			// because Socket would only give us the encrypted data.
+			public bool ConnectionIsWrapped => _connectionIsWrapped;
+			private bool _connectionIsWrapped;
 
-			public StreamPartialData(bool ignoreWrappedCalls)
+			public StreamPartialData(bool connectionIsWrapped)
 			{
 				RecvPartialBuffer = new MemoryStream(0);
 				SendPartialBuffer = new MemoryStream(0);
+
+				_doIgnore = false;
+				_detectionTries = 0;
 
 				RecvLock = new object();
 				SendLock = new object();
@@ -107,7 +136,54 @@ namespace Hooks.PacketDumper
 				_hasDecodedBNET = false;
 				_hasDecodedPEG = false;
 
-				IgnoreWrappedCalls = ignoreWrappedCalls;
+				_connectionIsWrapped = connectionIsWrapped;
+			}
+
+			// Transition this object to hold the data of the wrapped stream only!
+			public void MoveToWrappedConnection()
+			{
+				if (!_connectionIsWrapped)
+				{
+					_connectionIsWrapped = true;
+
+					// Remove all data from the buffers because the stream moves from unwrapped
+					// to wrapped state.
+					// This indicates that we're holding garbage data because the unwrapped data might
+					// have been obfuscated.
+					lock (RecvLock)
+					{
+						RecvPartialBuffer.SetLength(0);
+					}
+					lock (SendLock)
+					{
+						SendPartialBuffer.SetLength(0);
+					}
+
+					// Also reset the ignore status for this stream.
+					_doIgnore = false;
+				}
+			}
+
+			// Increase the amount of tries in order to detect the type of packet transmitted on this stream.
+			// This object will set DoIgnore to true after a predefined amount of tries is exceeded.
+			public void IncreasePacketDetectionTries()
+			{
+				_detectionTries++;
+				if (_detectionTries > 3)
+				{
+					// At 3 retries, ignore the stream!
+					_doIgnore = true;
+					// We CANNOT dispose of the buffers because we don't know if they should live
+					// because of stream wrapping or not!
+					//lock (RecvLock)
+					//{
+					//	RecvPartialBuffer.Dispose();
+					//}
+					//lock (SendLock)
+					//{
+					//	SendPartialBuffer.Dispose();
+					//}
+				}
 			}
 		}
 
@@ -237,7 +313,7 @@ namespace Hooks.PacketDumper
 			}
 			catch (Exception e)
 			{
-				HookRegistry.Log("Connecting analyzer failed for following reason: {0}", e.Message);
+				HookRegistry.Log("DumpServer - Connecting analyzer failed for following reason: {0}", e.Message);
 			}
 
 			if (client != null)
@@ -271,7 +347,7 @@ namespace Hooks.PacketDumper
 				}
 				catch (Exception e)
 				{
-					HookRegistry.Log("Sending BACKLOG to newly attached analyzer failed for following reason: {0}", e.Message);
+					HookRegistry.Log("DumpServer - Sending BACKLOG to newly attached analyzer failed for following reason: {0}", e.Message);
 				}
 			}
 
@@ -349,7 +425,7 @@ namespace Hooks.PacketDumper
 				}
 				catch (Exception e)
 				{
-					HookRegistry.Log("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
+					HookRegistry.Log("DumpServer - Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
 					CleanSocket(connection);
 				}
 			}
@@ -366,7 +442,7 @@ namespace Hooks.PacketDumper
 			}
 			catch (Exception e)
 			{
-				HookRegistry.Log("Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
+				HookRegistry.Log("DumpServer - Sending data to analyzer caused exception `{0}`, connection is closed!", e.Message);
 				CleanSocket(client);
 			}
 		}
@@ -389,6 +465,24 @@ namespace Hooks.PacketDumper
 			{
 				meta = new StreamPartialData(isWrapping);
 				_partialStreamBuffers[streamKey] = meta;
+
+				if (isWrapping)
+				{
+					HookRegistry.Debug("DumpServer - Wrapping stream registered - {0}", streamKey);
+				}
+				else
+				{
+					HookRegistry.Debug("DumpServer - Non-Wrapping stream registered - {0}", streamKey);
+				}
+			}
+			else
+			{
+				// Clear buffers if suddenly a wrapping stream is registered over the unwrapped one.
+				if (isWrapping && !meta.ConnectionIsWrapped)
+				{
+					HookRegistry.Log("DumpServer - {0} - Moving from unwrapped to wrapped state!", streamKey);
+					meta.MoveToWrappedConnection();
+				}
 			}
 		}
 
@@ -410,13 +504,16 @@ namespace Hooks.PacketDumper
 			_partialStreamBuffers.TryGetValue(streamKey, out meta);
 			if (meta == null)
 			{
-				HookRegistry.Panic("Provided key is not registered!");
+				HookRegistry.Panic("DumpServer - Provided key is not registered!");
 				return;
 			}
 
-			if (!isWrapping && meta.IgnoreWrappedCalls)
+			if(meta.DoIgnore) return;
+
+			// Skip unwrapped data because it might be obfuscated.
+			if (!isWrapping && meta.ConnectionIsWrapped)
 			{
-				HookRegistry.Debug("{0} - ignoring data because of wrapping", streamKey);
+				// HookRegistry.Debug("DumpServer - {0} - ignoring data because of wrapping", streamKey);
 				return;
 			}
 
@@ -429,12 +526,12 @@ namespace Hooks.PacketDumper
 			bool typeNewlyDecided = false;
 			lock (bufferLock)
 			{
-				HookRegistry.Debug("{0} - Storing {1}/{2} bytes into buffer", socket.GetHashCode(), count, buffer.Length);
+				HookRegistry.Debug("DumpServer - {0} - Storing {1}/{2} bytes into buffer", socket.GetHashCode(), count, buffer.Length);
 				correctStream.Write(buffer, offset, count);
 				// We suppose connection handshakes are always done by SENDING exactly ONE packet on the stream.
 				if (!meta.IsTypeDecided && isIncomingData == false)
 				{
-					DecideStreamPacketType(socket, meta);
+					DecideStreamPacketType(meta);
 					typeNewlyDecided = true;
 				}
 
@@ -459,7 +556,8 @@ namespace Hooks.PacketDumper
 			}
 		}
 
-		private void DecideStreamPacketType(Socket socket, StreamPartialData meta, PacketDirection dataDirection = PacketDirection.Outgoing)
+		// Tries to decode the first packet transmitted on the provided stream.
+		private void DecideStreamPacketType(StreamPartialData meta, PacketDirection dataDirection = PacketDirection.Outgoing)
 		{
 			int usedBytes;
 			uint bodyHash;
@@ -471,8 +569,11 @@ namespace Hooks.PacketDumper
 
 			if (buffer.Length < availableBytes)
 			{
-				HookRegistry.Panic("Buffer is not big enough to satisfy availablebytes!");
+				HookRegistry.Panic("DumpServer - Buffer is not big enough to satisfy availablebytes!");
 			}
+
+			// Increase detection tries.
+			meta.IncreasePacketDetectionTries();
 
 			/* 
 			 * Try decoding as BNET packet 
@@ -494,7 +595,7 @@ namespace Hooks.PacketDumper
 					}
 					else
 					{
-						HookRegistry.Log("BNET decoded, but bytes left in buffer! {0} <=> {1}", usedBytes, availableBytes);
+						HookRegistry.Log("DumpServer - BNET decoded, but bytes left in buffer! {0} <=> {1}", usedBytes, availableBytes);
 					}
 				}
 			}
@@ -517,11 +618,12 @@ namespace Hooks.PacketDumper
 				}
 				else
 				{
-					HookRegistry.Log("PEG decoded, but bytes left in buffer!");
+					HookRegistry.Log("DumpServer - PEG decoded, but bytes left in buffer!");
 				}
 			}
 
-			HookRegistry.Panic("Couldn't find out which packets are transmitted on this socket!");
+			byte[] buffSlice = buffer.Slice(0, availableBytes);
+			HookRegistry.Debug("DumpServer - Failed to detect packet type on stream:\n{0}", buffSlice.ToHexString());
 		}
 
 		/// <summary>
@@ -532,11 +634,11 @@ namespace Hooks.PacketDumper
 		/// <param name="skippedBytes"></param>
 		private void TrimMemoryStream(MemoryStream stream, int skippedBytes)
 		{
-			HookRegistry.Debug("Asked to trim off {0} bytes", skippedBytes);
+			HookRegistry.Debug("DumpServer - Asked to trim off {0} bytes", skippedBytes);
 
 			if (skippedBytes > stream.Length || skippedBytes < 1)
 			{
-				HookRegistry.Panic("Cannot skip more bytes than available inside the memory stream!");
+				HookRegistry.Panic("DumpServer - Cannot skip more bytes than available inside the memory stream!");
 			}
 
 			int remainingBytes = (int)(stream.Length - skippedBytes);
@@ -548,7 +650,7 @@ namespace Hooks.PacketDumper
 			}
 			else
 			{
-				// Reset buffer to empty
+				// Indicate the stream is empty.
 				stream.SetLength(0);
 			}
 		}
@@ -557,6 +659,7 @@ namespace Hooks.PacketDumper
 
 		#region DECOM_BNET
 
+		// Tries to deserialise as much as possible BNET packets from the provided stream.
 		private void LoopDeserializeBNET(MemoryStream stream, PacketDirection direction, bool singleRun)
 		{
 			int endComposedOffset = 0;
@@ -628,6 +731,7 @@ namespace Hooks.PacketDumper
 
 		#region DECOMP_PEG
 
+		// Tries to deserialise as much as possible PEG packets from the provided stream.
 		private void LoopDeserializePEG(MemoryStream stream, PacketDirection direction, bool singleRun)
 		{
 			int endComposedOffset = 0;
