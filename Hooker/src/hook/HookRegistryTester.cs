@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -7,7 +7,7 @@ namespace Hooker.Hook
 {
 	/*
 	 * Special code for loading and testing the Hookregistry library seperated from the hooking application domain.
-	 * Using a seperate application domain allows the HookRegistry to perform nasty stuff without (let's hope) affecting
+	 * Using a separate application domain allows the HookRegistry to perform nasty stuff without (let's hope) affecting
 	 * the hooking code.
 	 * Unloading the entire application domain also releases locks on possible libraries we want to overwrite!
 	 */
@@ -78,18 +78,11 @@ namespace Hooker.Hook
 					}
 					singletonMethod.Invoke(null, new object[] { });
 				}
-				catch (Exception e)
+				catch (TargetInvocationException e)
 				{
-					if (e is TargetInvocationException)
-					{
-						throw new FileNotFoundException("Hooksregistry or a dependancy was not found!", e.InnerException);
-					}
-					else
-					{
-						throw;
-					}
+					// Unpack actual exception which caused the issue and raise it.
+					throw e.InnerException;
 				}
-
 
 				// Locate all hooks.
 				FindHooks();
@@ -98,6 +91,7 @@ namespace Hooker.Hook
 			}
 			finally
 			{
+				// Remove listeners to be good memory citizens.
 				_currentDomain.AssemblyResolve -= FallbackAssemblyLoadGameLibrary;
 				_currentDomain.AssemblyResolve -= FallbackAssemblyHRReference;
 				_currentDomain.AssemblyLoad -= CollectReferencedAssemblies;

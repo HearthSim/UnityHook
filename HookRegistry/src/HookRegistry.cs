@@ -10,7 +10,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security;
+using System.Text;
 
 [assembly: AssemblyTitle("HookRegistry")]
 [assembly: AssemblyVersion("1.0.0.0")]
@@ -88,7 +90,9 @@ namespace Hooks
 				// it will return the location of the Assembly DOING the incovation!
 				string assemblyPath = Assembly.GetExecutingAssembly().Location;
 				string assemblyDirPath = Path.GetDirectoryName(assemblyPath);
-				// TODO: see if something needs to be done with the current directory.
+
+				// Pre-load necessary library files.
+				LoadExternalReferenceLibs();
 
 				if (_isWithinUnity)
 				{
@@ -100,9 +104,6 @@ namespace Hooks
 						Internal_Log("DEBUG messages will be printed!");
 					}
 
-					// Pre-load necessary library files.
-					ReferenceLoader.Load();
-
 					// Setup all hook information.
 					LoadRuntimeHooks();
 				}
@@ -111,7 +112,22 @@ namespace Hooks
 			_isInitialised = true;
 		}
 
+		private void LoadExternalReferenceLibs()
+		{
+			ReferenceLoader.Load();
+
+			var ss = new StringBuilder();
+			ss.AppendLine("Loaded reference libraries:");
+			foreach (Type refType in ReferenceLoader.ReferenceTypes)
+			{
+				ss.AppendLine(refType.Assembly.GetName().ToString());
+			}
+
+			Internal_Log(ss.ToString());
+		}
+
 		// Method that tests the execution context for the presence of an initialized Unity framework.
+		[MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
 		private static bool TestInGame()
 		{
 			return UnityEngine.Application.isPlaying;
@@ -125,7 +141,7 @@ namespace Hooks
 				// Test if this code is running within the Unity Engine
 				return TestInGame();
 			}
-			catch (SecurityException)
+			catch // This catches anything that's being thrown and silences it.
 			{
 				// Do nothing
 				return false;

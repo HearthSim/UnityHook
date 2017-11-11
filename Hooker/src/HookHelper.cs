@@ -89,9 +89,9 @@ namespace Hooker
 				{
 					// Create an instance of our own assembly in a new appdomain.
 					object instance = testingDomain
-						.CreateInstanceAndUnwrap(Assembly.GetExecutingAssembly().FullName, typeof(HookRegistryTester).FullName);
+						.CreateInstanceAndUnwrap(typeof(HookRegistryTester).Assembly.FullName, typeof(HookRegistryTester).FullName);
 
-					// All methods executed here are actually executed in the testing domain!
+					/* All methods used are actually executed in the testing domain! */
 					var hrTester = (HookRegistryTester)instance;
 					hrTester.Analyze(_options.HooksRegistryFilePath, gameKnowledge.LibraryPath);
 

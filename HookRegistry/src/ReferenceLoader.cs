@@ -23,7 +23,7 @@ namespace Hooks
 
 		// Holds the types created by Load().
 		// These types are explicitly stored in a list to prevent the compiler optimize away our load calls.
-		static List<Type> _references;
+		public static List<Type> ReferenceTypes;
 
 		public static void Load()
 		{
@@ -33,7 +33,7 @@ namespace Hooks
 			// NOTICE: Do NOT insert types refering to the original game libraries, because it could mess with versioning
 			// and produce strange runtime issues!
 
-			_references = new List<Type>()
+			ReferenceTypes = new List<Type>()
 			{			
 				// Reference to PayloadFormat.dll
 				typeof(Handshake),

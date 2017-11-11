@@ -3,15 +3,13 @@ using System;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
+using System.Threading;
 
 namespace Hooks
 {
 	[RuntimeHook]
 	class SocketHook
 	{
-		private bool _reentrant;
-
 		private Type _asyncOPModel;
 		private FieldInfo _asyncModelBuffer;
 		private FieldInfo _asyncModelOffset;
@@ -20,14 +18,18 @@ namespace Hooks
 		private MethodInfo[] _sendProxy;
 		private MethodInfo[] _readProxy;
 
+		private Map<int, Semaphore> _reentrantStructs;
+
 		public SocketHook()
 		{
 			HookRegistry.Register(OnCall);
 
-			_reentrant = false;
+			_reentrantStructs = new Map<int, Semaphore>();
 
 			InitDynamicTypes();
 		}
+
+		#region SETUP
 
 		private void InitDynamicTypes()
 		{
@@ -85,18 +87,9 @@ namespace Hooks
 				};
 		}
 
+		#endregion
+
 		#region PROXY
-
-		//private Type[] GetParamTypeArray(object[] args)
-		//{
-		//	Type[] result = new Type[args.Length];
-		//	for (int i = 0; i < args.Length; ++i)
-		//	{
-		//		result[i] = args[i]?.GetType();
-		//	}
-
-		//	return result;
-		//}
 
 		private object ProxyEndWrite(object socket, ref object[] args)
 		{
@@ -139,6 +132,33 @@ namespace Hooks
 
 		#endregion
 
+		// Returns TRUE if we're alowed to enter the hook, false otherwise.
+		// This method uses a semaphore to limit reentrancy, there is no semaphoreslim alternative
+		// AFAIK.
+		private bool ReentrantEnter(object thisObj)
+		{
+			int key = thisObj.GetHashCode();
+			Semaphore barrier;
+			_reentrantStructs.TryGetValue(key, out barrier);
+			if (barrier == null)
+			{
+				barrier = new Semaphore(1, 1);
+				_reentrantStructs[key] = barrier;
+			}
+
+			// Tests for the signal and returns immediately.
+			// This decreases the semaphore count (if not already at 0).
+			return barrier.WaitOne(0);
+		}
+
+		private void ReentrantLeave(object thisObj)
+		{
+			int key = thisObj.GetHashCode();
+			Semaphore barrier = _reentrantStructs[key];
+			// Increases semaphore count (if not already at maximum).
+			barrier.Release();
+		}
+
 		object OnCall(string typeName, string methodName, object thisObj, object[] args, IntPtr[] refArgs, int[] refIdxMatch)
 		{
 			if (typeName != "System.Net.Sockets.Socket" ||
@@ -147,14 +167,13 @@ namespace Hooks
 				return null;
 			}
 
-			if (_reentrant == true)
+			// Socket is a low-level construct so we must guard ourselves robustly against race conditions.
+			if (!ReentrantEnter(thisObj))
 			{
 				return null;
 			}
 
 			/* Actual hook code */
-
-			_reentrant = true;
 
 			bool isOutgoing = methodName.EndsWith("Send");
 			int OPResult = 0;
@@ -187,6 +206,14 @@ namespace Hooks
 
 			dumpServer.PreparePartialBuffers(thisSocket, false);
 
+			// Fetch the asyncModel early to prevent it being cleaned up
+			// directly after operation end.
+			var asyncResult = args[0] as IAsyncResult;
+			if (asyncResult == null)
+			{
+				HookRegistry.Panic("SocketHook - asyncResult == null");
+			}
+
 			if (isOutgoing)
 			{
 				int sentBytes = (int)ProxyEndWrite(thisObj, ref args);
@@ -213,11 +240,6 @@ namespace Hooks
 				//processedBytes = readBytes;
 			}
 
-			var asyncResult = args[0] as IAsyncResult;
-			if(asyncResult == null)
-			{
-				HookRegistry.Panic("SocketHook - asyncResult == null");
-			}
 			// These variables have a different meaning depending on the operation; read or write.
 			byte[] buffer = GetAsyncBuffer(asyncResult);
 			// Offset in buffer where relevant data starts.
@@ -226,19 +248,18 @@ namespace Hooks
 			// Amount of bytes actually processed by the operation.
 			int processedBytes = OPResult;
 
-			if(offset + processedBytes > buffer.Length)
-			{
-				offset -= processedBytes;
-			}
-
 			if (buffer != null)
 			{
-				// HookRegistry.Log("Offset: {0}, buffsize: {1}, element: {2}", offset, buffer.Length, processedBytes);
+				if (offset + processedBytes > buffer.Length)
+				{
+					offset -= processedBytes;
+				}
+
 				dumpServer.PartialData(thisSocket, !isOutgoing, buffer, offset, processedBytes, false);
 			}
 			else
 			{
-				HookRegistry.Debug("SocketHook - {0} - buffer == null", thisSocket.GetHashCode());
+				HookRegistry.Log("SocketHook - {0} - buffer == null", thisSocket.GetHashCode());
 			}
 
 			if (feedbackErrorCode == true)
@@ -249,7 +270,7 @@ namespace Hooks
 				Marshal.StructureToPtr(errorCode, errorCodePtr, true);
 			}
 
-			_reentrant = false;
+			ReentrantLeave(thisObj);
 			return OPResult;
 		}
 	}

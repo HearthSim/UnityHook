@@ -32,7 +32,7 @@ namespace Hooks.PacketDumper
 		private object _bufferLock;
 
 		// Holds information about all Pegasus Packet type integers.
-		private PacketDecoderManager _pegPacketDecoder;
+		private PegasusPacketDecoder _pegPacketDecoder;
 
 		// Contains the buffers holding partial data during transmissions.
 		// The buffers are mapped by their socket instance.
@@ -198,7 +198,7 @@ namespace Hooks.PacketDumper
 			_replayBuffer = new MemoryStream();
 			_bufferLock = new object();
 
-			_pegPacketDecoder = new PacketDecoderManager(false);
+			_pegPacketDecoder = new PegasusPacketDecoder();
 
 			_partialStreamBuffers = new Map<int, StreamPartialData>();
 
@@ -214,24 +214,43 @@ namespace Hooks.PacketDumper
 
 		private void Setup()
 		{
+			try
+			{
+				InitialiseHandshake();
+			}
+			catch (Exception e)
+			{
+				string message = String.Format("Dumpserver - Failed initialising handshake; {0}", e.ToString());
+				HookRegistry.Panic(message);
+			}
+
+			IPAddress listenAddress = IPAddress.Loopback;
+			int listenPort = 0;
 			for (int i = 0; i < 5; ++i)
 			{
-				IPAddress listenAddress = IPAddress.Loopback;
 				// Increase the listening port each iteration because multiple dumpservers
 				// could be active at the same time.
-				int listenPort = ANALYZER_LISTENER_PORT + i;
+				listenPort = ANALYZER_LISTENER_PORT + i;
+
+				// Becomes _connectionListener
+				var tempListener = new TcpListener(listenAddress, listenPort);
 
 				try
 				{
-					_connectionListener = new TcpListener(listenAddress, listenPort);
-
-					HookRegistry.Log("DumpServer - Listening on {0}:{1}", listenAddress, listenPort);
-					break;
+					tempListener.Start();
 				}
-				catch (Exception) // TODO; Change to explicit exception
+				catch (SocketException)
 				{
-					// Do nothing
+					// Do nothing, just skip to the next port
+					continue;
 				}
+
+				// Succesfully bound to a port.
+				_connectionListener = tempListener;
+				// Start asynchronously accepting analyzers.
+				_connectionListener.BeginAcceptSocket(AcceptAnalyzer, null);
+				// Continue setup process.
+				break;
 			}
 
 			if (_connectionListener == null)
@@ -240,16 +259,10 @@ namespace Hooks.PacketDumper
 			}
 			else
 			{
-				try
-				{
-					InitialiseHandshake();
-				}
-				catch (Exception e)
-				{
-					string message = String.Format("Dumpserver - Failed initialising handshake; {0}", e.ToString());
-					HookRegistry.Panic(message);
-				}
+				HookRegistry.Log("DumpServer - Listening on {0}:{1}", listenAddress, listenPort);
 			}
+
+
 		}
 
 		// Constructs the handshake payload.
@@ -271,8 +284,6 @@ namespace Hooks.PacketDumper
 			var tempBuffer = new MemoryStream();
 			handshake.WriteDelimitedTo(tempBuffer);
 			_handshakePayload = tempBuffer.ToArray();
-
-			InitialiseStream();
 		}
 
 		private static DumpServer _thisObj;
@@ -290,13 +301,6 @@ namespace Hooks.PacketDumper
 		#endregion
 
 		#region CONN_SETUP
-
-		// Start accepting analyzer connections.
-		private void InitialiseStream()
-		{
-			_connectionListener.Start();
-			_connectionListener.BeginAcceptSocket(AcceptAnalyzer, null);
-		}
 
 		private void AcceptAnalyzer(IAsyncResult result)
 		{
@@ -602,6 +606,7 @@ namespace Hooks.PacketDumper
 					if (usedBytes == availableBytes)
 					{
 						meta.HasDecodedBNET = true;
+						HookRegistry.Log("BNET packets were detected on stream!");
 						return;
 					}
 					else
@@ -625,6 +630,7 @@ namespace Hooks.PacketDumper
 				if (usedBytes == availableBytes)
 				{
 					meta.HasDecodedPEG = true;
+					HookRegistry.Log("PEG packets were detected on stream!");
 					return;
 				}
 				else
@@ -634,7 +640,7 @@ namespace Hooks.PacketDumper
 			}
 
 			byte[] buffSlice = buffer.Slice(0, availableBytes);
-			HookRegistry.Debug("DumpServer - Failed to detect packet type on stream:\n{0}", buffSlice.ToHexString());
+			HookRegistry.Log("DumpServer - Failed to detect packet type on stream:\n{0}", buffSlice.ToHexString());
 		}
 
 		/// <summary>
@@ -797,7 +803,7 @@ namespace Hooks.PacketDumper
 
 				if (currentPacket.IsLoaded())
 				{
-					if (!_pegPacketDecoder.CanDecodePacket(currentPacket.Type))
+					if (_pegPacketDecoder.CanDecodePacket(currentPacket.Type))
 					{
 						// Deserialize byte buffer (body) back into a ProtoBuf object.
 						// This is an additional false positive prevention barrier and 
@@ -811,13 +817,13 @@ namespace Hooks.PacketDumper
 						else
 						{
 							// If succesfully deserialized we can generate a hash from the packet contents.
-							bodyHash = Util.GenerateHashFromObjectType(decodedPacket.GetBody());
+							bodyHash = _pegPacketDecoder.GetPegTypeHash(currentPacket.Type);
 							return currentPacket;
 						}
 					}
 					else
 					{
-						HookRegistry.Log("PEG decoded, but bytes left in buffer!");
+						HookRegistry.Debug("DumpServer - Unknown PEG Type {0}", currentPacket.Type);
 					}
 				}
 			}

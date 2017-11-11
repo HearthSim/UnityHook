@@ -30,6 +30,8 @@ namespace Hooks
 			InitDynamicTypes();
 		}
 
+		#region SETUP
+
 		private void InitDynamicTypes()
 		{
 			if (HookRegistry.IsWithinUnity())
@@ -83,6 +85,8 @@ namespace Hooks
 				// "System.Net.Security.SslStream::Write",
 				};
 		}
+
+		#endregion
 
 		#region PROXY
 
@@ -162,6 +166,14 @@ namespace Hooks
 			Socket underlyingSocket = GetUnderlyingSocket(thisObj);
 			dumpServer.PreparePartialBuffers(underlyingSocket, true);
 
+			// Fetch the asyncModel early to prevent it being cleaned up
+			// directly after operation end.
+			var asyncResult = args[0] as IAsyncResult;
+			if(asyncResult == null)
+			{
+				HookRegistry.Panic("SslStreamHook - asyncResult == null");
+			}
+
 			if (isWriting)
 			{
 				OPresult = ProxyEndWrite(thisObj, args);
@@ -180,11 +192,6 @@ namespace Hooks
 				//count = readBytes; // Reassigned
 			}
 
-			var asyncResult = args[0] as IAsyncResult;
-			if(asyncResult == null)
-			{
-				HookRegistry.Panic("SslStreamHook - asyncResult == null");
-			}
 			// These variables have a different meaning depending on the operation; read or write.
 			byte[] buffer = GetAsyncBuffer(asyncResult);
 			// Offset in buffer where relevant data starts.
@@ -204,7 +211,7 @@ namespace Hooks
 			}
 			else
 			{
-				HookRegistry.Debug("SslStreamHook - {0} - buffer == null!", underlyingSocket.GetHashCode());
+				HookRegistry.Log("SslStreamHook - {0} - buffer == null!", underlyingSocket.GetHashCode());
 			}
 
 
