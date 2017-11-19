@@ -169,7 +169,7 @@ namespace Hooks
 			// Fetch the asyncModel early to prevent it being cleaned up
 			// directly after operation end.
 			var asyncResult = args[0] as IAsyncResult;
-			if(asyncResult == null)
+			if (asyncResult == null)
 			{
 				HookRegistry.Panic("SslStreamHook - asyncResult == null");
 			}
@@ -207,7 +207,8 @@ namespace Hooks
 			// We can assume the async operation succeeded.			
 			if (buffer != null)
 			{
-				dumpServer.PartialData(underlyingSocket, !isWriting, buffer, offset, count, true);
+				// HookRegistry.Log("SslStreamHook - {0} - writing", underlyingSocket.GetHashCode());
+				dumpServer.PartialData(underlyingSocket, !isWriting, buffer, offset, count, isWrapping: true, singleDecode: false);
 			}
 			else
 			{
