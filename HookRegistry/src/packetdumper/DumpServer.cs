@@ -161,6 +161,7 @@ namespace Hooks.PacketDumper
 
 					// Also reset the ignore status for this stream.
 					_doIgnore = false;
+					_detectionTries = 0; // ! Important
 				}
 			}
 
@@ -171,6 +172,7 @@ namespace Hooks.PacketDumper
 				_detectionTries++;
 				if (_detectionTries > 3)
 				{
+					HookRegistry.Log("DumpServer - Maximum tries for detecting packet type exceeded!");
 					// At 3 retries, ignore the stream!
 					_doIgnore = true;
 					// We CANNOT dispose of the buffers because we don't know if they should live
@@ -408,14 +410,18 @@ namespace Hooks.PacketDumper
 			// Write length delimited payload.
 			var tempBuffer = new MemoryStream();
 			packet.WriteDelimitedTo(tempBuffer);
-			byte[] packetBytes = tempBuffer.ToArray();
-
+			// Re-use underlying buffer for copying. The alternative was constructing a new
+			// buffer for only the written contents.
+			byte[] packetBytes = tempBuffer.GetBuffer();
+			int packetLength = (int)tempBuffer.Length;
 
 			Socket[] connectionsCopy;
 			lock (_bufferLock)
 			{
+				HookRegistry.Log("DumpServer - Dumping packet of {0} bytes.", count);
+
 				// Append data to the replay buffer.
-				_replayBuffer.Write(packetBytes, 0, packetBytes.Length);
+				_replayBuffer.Write(packetBytes, 0, packetLength);
 				// Race conditions occur when a copy isn't made.
 				connectionsCopy = _connections.ToArray();
 			}
@@ -425,7 +431,7 @@ namespace Hooks.PacketDumper
 			{
 				try
 				{
-					connection.BeginSend(packetBytes, 0, packetBytes.Length, SocketFlags.None, FinishSocketSend, connection);
+					connection.BeginSend(packetBytes, 0, packetLength, SocketFlags.None, FinishSocketSend, connection);
 				}
 				catch (Exception e)
 				{
@@ -494,7 +500,7 @@ namespace Hooks.PacketDumper
 		// The buffers are inspected for game packets and transmitted to the analyzers (if listening).
 		// singleDecode is used to instruct the decoder loop to stop after succesfully decoding ONE packet, instead
 		// of trying to decode more packets afterwards.
-		public void PartialData(Socket socket, bool isIncomingData, byte[] buffer, int offset, int count, bool isWrapping, bool singleDecode = false)
+		public void PartialData(Socket socket, bool isIncomingData, byte[] buffer, int offset, int count, bool isWrapping, bool singleDecode)
 		{
 			if (_connectionListener == null) return;
 
@@ -517,7 +523,7 @@ namespace Hooks.PacketDumper
 			// Skip unwrapped data because it might be obfuscated.
 			if (!isWrapping && meta.ConnectionIsWrapped)
 			{
-				// HookRegistry.Debug("DumpServer - {0} - ignoring data because of wrapping", streamKey);
+				HookRegistry.Debug("DumpServer - {0} - ignoring data because of wrapping", streamKey);
 				return;
 			}
 
@@ -530,7 +536,7 @@ namespace Hooks.PacketDumper
 			bool typeNewlyDecided = false;
 			lock (bufferLock)
 			{
-				HookRegistry.Debug("DumpServer - {0} - Storing {1}/{2} bytes into buffer", socket.GetHashCode(), count, buffer.Length);
+				// HookRegistry.Debug("DumpServer - {0} - Storing {1}/{2} bytes into buffer", socket.GetHashCode(), count, buffer.Length);
 				try
 				{
 					correctStream.Write(buffer, offset, count);

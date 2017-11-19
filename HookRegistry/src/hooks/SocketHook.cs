@@ -255,7 +255,8 @@ namespace Hooks
 					offset -= processedBytes;
 				}
 
-				dumpServer.PartialData(thisSocket, !isOutgoing, buffer, offset, processedBytes, false);
+				// HookRegistry.Log("SocketHook - {0} - writing", thisSocket.GetHashCode());
+				dumpServer.PartialData(thisSocket, !isOutgoing, buffer, offset, processedBytes, isWrapping: false, singleDecode: false);
 			}
 			else
 			{
