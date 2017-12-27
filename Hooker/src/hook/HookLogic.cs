@@ -83,7 +83,7 @@ namespace Hooker.Hook
 				//      - ns.OnCall(..)
 				//      - ns.deepns.OnCall(..)
 				//      - ns.OnCall_static(..)
-				return idx < 0 ? false : idx == 0 || t.Name[idx - 1] == '.';
+				return idx < 0 ? false : idx == 0 || t.FullName[idx - 1] == '.';
 			});
 
 			// A Type (probably class) is found, now we test it/them for the requested method
